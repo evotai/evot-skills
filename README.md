@@ -17,7 +17,6 @@ Units land in `~/.evotai/skills/`, keeping the layout below. `/skill install` ov
 | Unit | Skills | Needs |
 | --- | --- | --- |
 | `databend-cloud` | 1 | `python3`, `BENDCLOUD_DSN` |
-| `harden` | 1 | — |
 | `humanize` | 1 | — |
 | `lark` | 27 | `lark-cli` |
 | `opencli` | 1 | `opencli` |
