@@ -12,6 +12,7 @@ DEFAULT_HOST = "api.databend.com"
 DEFAULT_WAREHOUSE = "default"
 PREFIX = "BENDCLOUD_DSN"
 RETRYABLE = ("ProvisionWarehouseTimeout", "ProvisionWarehouse")
+USER_AGENT = "evot-databend-cloud/1"
 HINT = (
     "Databend Cloud is not configured. Run in evot:\n"
     "  /env set BENDCLOUD_DSN=bendcloud://<org>:<api-token>@api.databend.com/<warehouse>"
@@ -82,7 +83,8 @@ def base_url(creds):
 
 def request(url, headers, payload=None, timeout=60):
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+    sent = {**headers, "User-Agent": USER_AGENT}
+    req = urllib.request.Request(url, data=data, headers=sent, method="POST" if data else "GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode() or "{}")
@@ -122,7 +124,10 @@ def run_once(sql, creds, timeout):
     rows = list(first.get("data", []))
 
     next_uri = first.get("next_uri", "")
+    deadline = time.monotonic() + timeout
     while next_uri and "/final" not in next_uri:
+        if time.monotonic() > deadline:
+            raise QueryError(f"still paging results after {timeout}s; query_id={query_id}")
         page = request(f"{root}{next_uri}", headers, None, timeout)
         raise_for_error(page)
         rows.extend(page.get("data", []))
