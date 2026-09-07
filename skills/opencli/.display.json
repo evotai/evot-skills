@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Browse, research, and automate the web",
+  "example": "opencli: What's new on my Twitter timeline?"
+}

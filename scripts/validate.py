@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate the skill catalog layout, frontmatter, and internal references."""
+import json
 import os
 import re
 import sys
@@ -13,6 +14,47 @@ SCRIPT_RE = re.compile(
 )
 MAX_LINES = 500
 MAX_BYTES = 1_000_000
+
+
+DISPLAY_FILE = '.display.json'
+DISPLAY_MAX_BYTES = 4096
+
+
+def validate_display(data, unit):
+    """The v1 display contract shared with evot's startup reader."""
+    if not isinstance(data, dict):
+        return ['must be a JSON object']
+    errors = []
+    if type(data.get('schema_version')) is not int or data['schema_version'] != 1:
+        errors.append('schema_version must be 1')
+    for field, maximum in [('summary', 60), ('example', 96)]:
+        value = data.get(field)
+        if (not isinstance(value, str) or not 1 <= len(value) <= maximum
+                or value != value.strip() or not all(' ' <= char <= '~' for char in value)):
+            errors.append(f'{field} must be nonempty, single-line English text (max {maximum} characters)')
+    example = data.get('example')
+    prefix = f'{unit}: '
+    if isinstance(example, str) and (not example.startswith(prefix) or not example[len(prefix):].strip()):
+        errors.append(f'example must start with "{prefix}" followed by a task')
+    return errors
+
+
+def check_display(unit_dir, errors):
+    path = os.path.join(unit_dir, DISPLAY_FILE)
+    rel = os.path.relpath(path, ROOT)
+    if not os.path.isfile(path) or os.path.islink(path):
+        errors.append(f'{rel}: required regular file for every official unit')
+        return
+    if os.path.getsize(path) > DISPLAY_MAX_BYTES:
+        errors.append(f'{rel}: exceeds {DISPLAY_MAX_BYTES} bytes')
+        return
+    try:
+        with open(path, encoding='utf-8') as stream:
+            data = json.load(stream)
+    except (OSError, ValueError) as error:
+        errors.append(f'{rel}: invalid JSON ({error})')
+        return
+    errors.extend(f'{rel}: {error}' for error in validate_display(data, os.path.basename(unit_dir)))
 
 
 def visible_dirs(path):
@@ -96,6 +138,8 @@ def check_files(errors):
             if os.path.islink(path):
                 errors.append(f"{rel}: symlinks are not allowed")
                 continue
+            if name == DISPLAY_FILE and os.path.dirname(base) != SKILLS:
+                errors.append(f'{rel}: display metadata belongs at the install unit root')
             if name.startswith(".env") or name == ".DS_Store":
                 errors.append(f"{rel}: must not be committed")
             if os.path.getsize(path) > MAX_BYTES:
@@ -116,6 +160,7 @@ def main():
     for unit in units:
         unit_rel = os.path.join("skills", unit)
         unit_dir = os.path.join(SKILLS, unit)
+        check_display(unit_dir, errors)
         children = visible_dirs(unit_dir)
         has_own = os.path.isfile(os.path.join(unit_dir, "SKILL.md"))
 

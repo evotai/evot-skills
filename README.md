@@ -2,52 +2,61 @@
 
 Official skill catalog for [evot](https://github.com/evotai/evot).
 
-## Install
+## Usage
 
-```
-/skill install                  # every unit in this repo
-/skill install databend-cloud   # one unit
-/skill update                   # refresh what is installed
+Official skills are installed and updated automatically. To manage them manually:
+
+```text
+/skill install                  # install all
+/skill install databend-cloud   # install one
+/skill update                   # update installed skills
 ```
 
-Units land in `~/.evotai/skills/`, keeping the layout below. `/skill install` overwrites local edits, so treat installed copies as managed files.
+Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 
 ## Catalog
 
-| Unit | Skills | Needs |
+| Unit | Purpose | Needs |
 | --- | --- | --- |
-| `databend-cloud` | 1 | `python3`, `BENDCLOUD_DSN` |
-| `humanize` | 1 | — |
-| `lark` | 27 | `lark-cli` |
-| `opencli` | 1 | `opencli` |
+| `databend-cloud` | Query and diagnose Databend | `python3`, `BENDCLOUD_DSN` |
+| `humanize` | Make AI writing sound human | — |
+| `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
+| `opencli` | Browse, research, and automate the web | `opencli` |
 
-## Layout
+## Contributing
 
-```
+Each directory under `skills/` is one install unit: a single skill or a group installed together.
+
+```text
 skills/
-├── databend-cloud/       unit with a SKILL.md — one skill
-│   ├── SKILL.md
-│   └── scripts/query.py
-└── lark/                 unit without a SKILL.md — a group of skills
-    ├── README.md
-    ├── lark-shared/
-    └── lark-im/
+├── humanize/
+│   ├── .display.json
+│   └── SKILL.md
+└── lark/
+    ├── .display.json
+    ├── lark-im/SKILL.md
+    └── lark-doc/SKILL.md
 ```
 
-A directory under `skills/` is one install unit:
+Follow the [Agent Skills specification](https://agentskills.io/specification). Each `SKILL.md` needs a unique `name` matching its directory and a `description` explaining when to use it. Groups cannot nest; file references must stay within the install unit.
 
-- it has a `SKILL.md`, so the unit is a single skill, or
-- it has none, so every child holding a `SKILL.md` is a skill and the directory is a group.
+### Startup display
 
-Groups exist because skills can reference siblings — every `lark-*` skill reads `../lark-shared/SKILL.md` — so the group installs and updates as one piece. Nesting stops there; a group cannot contain another group.
+Add one `.display.json` at the unit root:
 
-Skill names are global in evot, so every name in this repo must be unique.
+```json
+{
+  "schema_version": 1,
+  "summary": "Work with Feishu messages, docs, and calendars",
+  "example": "lark: What's new in my alerts group?"
+}
+```
 
-## Skill format
+Use single-line, printable ASCII text without surrounding whitespace: `summary` up to 60 characters; `example` up to 96, starting with `unit-name: `. These fields are for display only, not model instructions.
 
-Skills follow the [Agent Skills specification](https://agentskills.io/specification): a directory with `SKILL.md`, plus optional `scripts/`, `references/`, and `assets/`. `name` must equal the directory name; `description` states what the skill does and when to use it.
+### Prerequisites
 
-Declare runtime prerequisites so `/skill install` can check them and tell the user what is missing:
+Declare dependencies in `SKILL.md` frontmatter:
 
 ```yaml
 metadata:
@@ -55,18 +64,16 @@ metadata:
     requires:
       env: [BENDCLOUD_DSN]
       bins: [python3]
-    envHints:
-      BENDCLOUD_DSN: bendcloud://<org>:<api-token>@api.databend.com/<warehouse>
 ```
 
-`envHints` supplies the value template evot shows in its `/env set` suggestion. The older `metadata.requires.bins` shape is also read.
+Store secrets with `/env set`, never in this repo.
 
-Secrets belong in evot variables (`/env set`), never in this repo.
-
-## Validate
+## Validation
 
 ```bash
 python3 scripts/validate.py
+python3 -m unittest discover -s tests -v
+python3 scripts/run_tests.py
 ```
 
-CI runs this on every push and pull request. It checks unit layout and nesting depth, frontmatter, name uniqueness, that references resolve inside their unit, and that no symlinks, `.env` files, or oversized files are committed.
+CI checks layout, frontmatter, display metadata, references, and file safety, then runs validator and skill tests.

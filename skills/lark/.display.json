@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Work with Feishu messages, docs, and calendars",
+  "example": "lark: What's new in my alerts group?"
+}

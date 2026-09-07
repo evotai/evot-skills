@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Make AI writing sound human",
+  "example": "humanize: Rewrite this naturally, keeping the meaning"
+}
