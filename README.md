@@ -19,7 +19,6 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | Unit | Purpose | Needs |
 | --- | --- | --- |
 | `databend-cloud` | Query and diagnose Databend | `python3`, `BENDCLOUD_DSN` |
-| `humanize` | Make AI writing sound human | — |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Browse, research, and automate the web | `opencli` |
 
@@ -29,7 +28,7 @@ Each directory under `skills/` is one install unit: a single skill or a group in
 
 ```text
 skills/
-├── humanize/
+├── databend-cloud/
 │   ├── .display.json
 │   └── SKILL.md
 └── lark/
