@@ -19,6 +19,7 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | Unit | Purpose | Needs |
 | --- | --- | --- |
 | `databend-cloud` | Query and diagnose Databend | `python3`, `BENDCLOUD_DSN` |
+| `databend-cloud-troubleshooting` | Find the root cause of Databend alerts | `python3`, `jq`, `BENDCLOUD_DSN` |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Browse, research, and automate the web | `opencli` |
 
