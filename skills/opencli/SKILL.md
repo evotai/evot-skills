@@ -46,9 +46,19 @@ opencli <adapter> -h
 opencli <adapter> <command> -h
 ```
 
-3. Prefer a matching adapter when present. Otherwise use `opencli browser`.
+3. Prefer a matching adapter when present. `opencli browser` is the last resort, not the default.
 4. Prefer structured output (`-f json`) when supported.
 5. Do not guess command names or flags; use live help.
+
+## Window policy (do not pop Chrome in the user's face)
+
+OpenCLI has no headless mode: browser work always runs in the user's real Chrome through the extension. `opencli browser` defaults to a **foreground** window that steals focus, and the automation window closes after 30s idle, so repeated commands make Chrome flash open and closed. Follow these rules:
+
+- Every `opencli browser <session> ...` call MUST carry `--window background` unless the user explicitly asks to watch or interact with the page (login, CAPTCHA). `OPENCLI_WINDOW=background` may already be set in the environment; pass the flag anyway.
+- Reuse one stable `<session>` name for the whole task so the tab lease is reused instead of re-created.
+- For a page the user already has open (logged-in consoles, SSO), prefer `opencli browser <session> bind` over `open`: binding never creates a window and never expires.
+- Only use `--window foreground` when the user must act in the page; say so before doing it.
+- `OPENCLI_CDP_ENDPOINT` does NOT redirect `opencli browser` or site adapters (it only applies to Electron app adapters). Do not try to route browser commands to a headless Chrome with it.
 
 ## Browser dependency
 
@@ -107,22 +117,27 @@ Only fall back to `opencli browser` for Feishu if `lark-cli` is unavailable or t
 
 ## Browser workflow
 
-For a new page:
+`opencli browser` requires a `<session>` positional right after `browser`. Pick one name per task and reuse it.
+
+For a new page (background window, no focus steal):
 
 ```bash
 opencli doctor
-opencli browser open <url>
-opencli browser state
+opencli browser work open <url> --window background
+opencli browser work state --window background
+opencli browser work extract --window background
+opencli browser work close   # release the tab when the task is done
 ```
 
-For an already-open logged-in tab:
+For an already-open logged-in tab (no new window at all):
 
 ```bash
-opencli browser bind --domain <domain>
-opencli browser --workspace bound:default state
+opencli browser work bind --domain <domain>
+opencli browser work state
+opencli browser work unbind   # detach when done; never closes the user's tab
 ```
 
-Use `state`, `find`, `click`, `type`, `keys`, `get`, and `extract`. Refresh state after navigation or major DOM changes. Do not reuse stale refs.
+Use `state`, `find`, `click`, `type`, `keys`, `get`, and `extract`. Refresh state after navigation or major DOM changes. Do not reuse stale refs. Run `opencli browser <session> close` at the end of a task so the automation window goes away cleanly instead of lingering.
 
 ## Safety and failures
 
