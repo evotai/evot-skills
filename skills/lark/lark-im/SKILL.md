@@ -58,6 +58,30 @@ The four message-pulling shortcuts (`+messages-mget`, `+chat-messages-list`, `+m
 
 `+chat-messages-list`, `+messages-mget`, and `+threads-messages-list` accept `--download-resources` to save eligible attachments into `./lark-im-resources/` and add a `resources` array to each message. It is off by default; stickers are not downloadable. A failed attachment is reported on that resource without aborting the message pull. Use [`+messages-resources-download`](references/lark-im-messages-resources-download.md) for one attachment. See [`references/lark-im-message-enrichment.md`](references/lark-im-message-enrichment.md) for the output contract.
 
+### Finding a Person's DM / "我和某人的最新对话"
+
+Resolve the person first, then pull messages. Do **not** try to find a P2P chat by scanning `+chat-list` or `+chat-search`:
+
+- `+chat-search` searches **group chats only**; it never returns P2P conversations. A `total: 0` for a person's name is expected, not a miss.
+- `+chat-list --types p2p` returns P2P chats whose `name` is the partner's **profile display name** (e.g. `张三`), never a nickname / English name (e.g. `alice`). Regex-matching a nickname across all chats is wasted work.
+
+Standard path:
+
+```bash
+# 1. real name / email in the directory → returns p2p_chat_id directly
+lark-cli contact +search-user --query "张三" --has-chatted --as user
+# 2. latest messages, newest first
+lark-cli im +chat-messages-list --chat-id oc_xxx --order desc --page-size 20
+```
+
+If step 1 returns `users: []`, the name is likely a nickname / English name not stored in the profile. Switch to message search and read `chat_partner`:
+
+```bash
+lark-cli im +messages-search --query "<nickname>" --chat-type p2p --page-size 20
+```
+
+When the hits concentrate in one `chat_partner.open_id`, that partner **is** the person — proceed to step 2 with that `chat_id` (or `--user-id ou_xxx`). Do not keep retrying case variants, `nick@` emails, or transliterations in the directory. See `lark-contact/SKILL.md` 「按昵称搜不到人」 for the full decision rule.
+
 ### Card Messages (Interactive)
 
 **Before sending or replying with any `interactive` card (`+messages-send` / `+messages-reply`), you MUST read [`references/card/lark-im-card-create.md`](references/card/lark-im-card-create.md) and follow its workflow.** The card JSON passed to `--msg-type interactive --content` must be the output of that workflow — never hand-write or copy a card payload.
@@ -104,10 +128,10 @@ Shortcut 是对常用操作的高级封装（`lark-cli im +<verb> [flags]`）。
 | Shortcut | 说明 |
 |----------|------|
 | [`+chat-create`](references/lark-im-chat-create.md) | Create a group chat or topic chat; user/bot; --chat-mode group|topic; private/public; invites users/bots; optionally sets bot manager |
-| [`+chat-list`](references/lark-im-chat-list.md) | List chats the current user/bot is a member of; defaults to groups; pass --types=p2p,group to include p2p single chats (user-only); user/bot; supports sorting, auto-pagination, --exclude-muted (user-only) |
+| [`+chat-list`](references/lark-im-chat-list.md) | List chats the current user/bot is a member of; defaults to groups; pass --types=p2p,group to include p2p single chats (user-only); p2p `name` is the partner's profile display name only (no nicknames) — use `contact +search-user` to locate a person's DM instead of scanning this list; user/bot; supports sorting, auto-pagination, --exclude-muted (user-only) |
 | [`+chat-members-list`](references/lark-im-chat-members-list.md) | List members of a chat; returns separate users[] / bots[] buckets; callable as user or bot; --member-types filters which kinds to return; --page-all pagination; surfaces truncations[] when the server caps a bucket |
 | [`+chat-messages-list`](references/lark-im-chat-messages-list.md) | List messages in a chat or P2P conversation; user/bot; accepts --chat-id or --user-id, resolves P2P chat_id, supports time range, --order asc/desc sorting, auto-pagination |
-| [`+chat-search`](references/lark-im-chat-search.md) | Search visible group chats by --query keyword and/or --member-ids; user/bot; e.g. look up chat_id by group name; supports type filters, sorting, auto-pagination, and --exclude-muted (user identity only) |
+| [`+chat-search`](references/lark-im-chat-search.md) | Search visible **group** chats by --query keyword and/or --member-ids; **does not return P2P conversations** (use `contact +search-user` → `p2p_chat_id` for DMs); user/bot; e.g. look up chat_id by group name; supports type filters, sorting, auto-pagination, and --exclude-muted (user identity only) |
 | [`+chat-update`](references/lark-im-chat-update.md) | Update group chat name or description; user/bot; updates a chat's name or description |
 | [`+messages-mget`](references/lark-im-messages-mget.md) | Batch get messages by IDs; user/bot; fetches up to 50 om_ message IDs, formats sender names, expands thread replies |
 | [`+messages-reply`](references/lark-im-messages-reply.md) | Reply to a message (supports thread replies); user/bot; supports text/markdown/post/media replies, reply-in-thread, idempotency key |

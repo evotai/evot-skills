@@ -28,6 +28,29 @@ metadata:
 - 名字含 bot / agent / AI / 助手 / 机器人 / 智能体 / assistant 等明显特征时,反过来先搜机器人更快
 - 不确定的话两边都搜一下
 
+### 按昵称 / 英文名 / 拼音搜不到人(`users: []`)
+
+`+search-user --query` **只匹配通讯录 profile 字段**(姓名、企业邮箱、手机号)。用户口头叫的英文名、昵称、系统用户名(如 `alice`、`老王`)通常不在 profile 里,搜出 `users: []` 是**预期结果,不代表人不存在**。此时:
+
+1. **不要**反复换大小写、拼 `nick@` 前缀邮箱、猜中文音译——这些几乎必然继续返回空。
+2. **直接转到聊天记录找人**,昵称一定出现在聊天里:
+
+   ```bash
+   # 第一步:在单聊里搜昵称,看结果集中在谁的会话
+   lark-cli im +messages-search --query "<昵称>" --chat-type p2p --page-size 20
+   ```
+
+   看每条结果的 `chat_partner.open_id`:**若绝大多数命中集中在同一个 partner,即可判定这个 partner 就是该昵称对应的人**(对方机器上 `ssh <nick>@`、你发给他的账号、别人 `@他` 时提到昵称等,都是有效证据,无需再找「更直白」的确认)。拿到 open_id 后回填姓名:
+
+   ```bash
+   lark-cli contact +search-user --user-ids ou_xxx
+   ```
+
+3. p2p 里搜不到时再搜群聊:`lark-cli im +messages-search --query "<昵称>"`,看消息里 `@提及` 与昵称的共现(如「让 alice 看看 @张三」→ alice = 张三)。
+4. 仍无法判定 → 把候选列给用户,或直接问用户「<昵称> 是谁」。不要联网搜索。
+
+补充:`im +chat-search` 只搜群聊、不返回 p2p;`im +chat-list --types p2p` 里 p2p 的 `name` 是对方 profile 显示名(不含昵称),用昵称正则全量匹配 chat-list 是无效的。
+
 ## 典型场景
 
 找张三给他发消息:先搜,确认 open_id,再发:
@@ -46,6 +69,15 @@ lark-cli contact user_profiles batch_query \
   --data '{"user_ids":["ou_xxx","ou_yyy"],"query_option":{"include_personal_status":true,"include_description":true}}' \
   --as user
 ```
+
+找和某人的最新对话:先拿 `p2p_chat_id`,再倒序拉消息:
+
+```bash
+lark-cli contact +search-user --query "张三" --has-chatted --as user   # 结果自带 p2p_chat_id
+lark-cli im +chat-messages-list --chat-id oc_xxx --order desc --page-size 20
+```
+
+`search-user` 返回空时按上文「按昵称 / 英文名搜不到人」处理,不要在通讯录里反复试。
 
 搜索命中多条且后续操作有副作用(发消息、邀请会议等),把候选列给用户挑;不要擅自选第一条。
 

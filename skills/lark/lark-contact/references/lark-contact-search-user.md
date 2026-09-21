@@ -8,6 +8,7 @@
 - ✅ 已知一组 open_id 想批量校验或回填字段(`--user-ids`,最多 100,支持 `me`)
 - ✅ 按聊天关系 / 在职状态 / 租户边界 / 企业邮箱等维度筛选员工
 - ❌ 已知 open_id 想发消息 → 直接走 `lark-im`,不经过本命令
+- ❌ 昵称 / 英文名 / 系统用户名(如 `alice`、`老王`)→ `--query` 只匹配 profile 的姓名 / 邮箱 / 手机号,这类词大概率返回 `users: []`。不要反复换大小写 / 拼邮箱 / 猜音译,改走 `im +messages-search --query <nick> --chat-type p2p` 看 `chat_partner` 分布(见 SKILL.md「按昵称搜不到人」)
 
 ## 关键 flag
 
