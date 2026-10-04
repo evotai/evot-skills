@@ -52,13 +52,18 @@ opencli <adapter> <command> -h
 
 ## Window policy (do not pop Chrome in the user's face)
 
-OpenCLI has no headless mode: browser work always runs in the user's real Chrome through the extension. `opencli browser` defaults to a **foreground** window that steals focus, and the automation window closes after 30s idle, so repeated commands make Chrome flash open and closed. Follow these rules:
+OpenCLI has no headless mode: browser work always runs in the user's real Chrome through the extension, sharing its cookies and logins. `opencli browser` defaults to a **foreground** window that steals focus. With `--window background`, OpenCLI opens its own separate automation window: the user's existing windows and tabs are left untouched and focus stays where it was. There is no option to add a tab inside the user's own window; the automation window is the isolation boundary. Follow these rules:
 
 - Every `opencli browser <session> ...` call MUST carry `--window background` unless the user explicitly asks to watch or interact with the page (login, CAPTCHA). `OPENCLI_WINDOW=background` may already be set in the environment; pass the flag anyway.
 - Reuse one stable `<session>` name for the whole task so the tab lease is reused instead of re-created.
-- For a page the user already has open (logged-in consoles, SSO), prefer `opencli browser <session> bind` over `open`: binding never creates a window and never expires.
+- Need several pages at once? Use `opencli browser <session> tab new <url> --window background`. The tab opens in the automation window (not the user's), prints a `page` id, and becomes the session's default tab. Switch with `tab select <id>` or `--tab <id>`, and close it with `tab close <id>`.
+- Never navigate, click in, or close a tab the session did not create, unless the user asked you to work in that tab.
 - Only use `--window foreground` when the user must act in the page; say so before doing it.
 - `OPENCLI_CDP_ENDPOINT` does NOT redirect `opencli browser` or site adapters (it only applies to Electron app adapters). Do not try to route browser commands to a headless Chrome with it.
+
+### `bind` drives the user's own tab
+
+`opencli browser <session> bind` takes no URL or domain: it attaches to whichever tab is **currently focused** in Chrome, then every `open`/`click`/`type` runs in that tab. It does not open a window, but it does act on the page the user is looking at. Only use it when the page's state can't be reached any other way (for example, a page in the middle of an SSO flow or a form the user already filled in). Before binding, ask the user to focus the target tab. Prefer read-only commands (`state`, `get`, `extract`) and run `unbind` when done; `unbind` detaches without closing the tab. For an ordinary logged-in site, use `open --window background` instead: the automation window shares the same cookies.
 
 ## Browser dependency
 
@@ -126,18 +131,27 @@ opencli doctor
 opencli browser work open <url> --window background
 opencli browser work state --window background
 opencli browser work extract --window background
-opencli browser work close   # release the tab when the task is done
+opencli browser work close --window background   # release the session's tab lease
 ```
 
-For an already-open logged-in tab (no new window at all):
+More pages in the same automation window:
 
 ```bash
-opencli browser work bind --domain <domain>
-opencli browser work state
-opencli browser work unbind   # detach when done; never closes the user's tab
+opencli browser work tab new <url> --window background    # prints {"page": "<id>"}
+opencli browser work tab list --window background
+opencli browser work extract --tab <id> --window background
+opencli browser work tab close <id> --window background
 ```
 
-Use `state`, `find`, `click`, `type`, `keys`, `get`, and `extract`. Refresh state after navigation or major DOM changes. Do not reuse stale refs. Run `opencli browser <session> close` at the end of a task so the automation window goes away cleanly instead of lingering.
+Only when the user has focused the exact tab to work in (see `bind` above):
+
+```bash
+opencli browser work bind      # attaches to the currently focused tab
+opencli browser work state
+opencli browser work unbind    # detach; never closes the user's tab
+```
+
+Use `state`, `find`, `click`, `type`, `keys`, `get`, and `extract`. Refresh state after navigation or major DOM changes. Do not reuse stale refs. Run `opencli browser <session> close` at the end of a task to release the lease. `close` may leave an empty automation window behind (its tabs are reset to `about:blank`). That's harmless, but never close Chrome windows yourself to clean it up.
 
 ## Safety and failures
 
