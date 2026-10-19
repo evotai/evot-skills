@@ -1,5 +1,0 @@
-{
-  "schema_version": 1,
-  "summary": "Find the root cause of Databend alerts",
-  "example": "databend-cloud-troubleshooting: Why did this warehouse OOM?"
-}

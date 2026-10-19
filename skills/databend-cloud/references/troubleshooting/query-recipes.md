@@ -2,10 +2,10 @@
 
 Read-only SQL templates for task outcomes, repeated failures, node exits, and version comparisons. Replace placeholders only after confirming UTC times and the live schema. Every statement here is read-only.
 
-Invoke them through the skill's runner, naming the target explicitly:
+Follow the [incident workflow](index.md) and confirm the [live log schema](log-schema.md) first. All script paths are relative to the installed skill root. Invoke templates through the shared runner, passing the actual org and confirmed origin explicitly:
 
 ```bash
-python3 scripts/query.py --target <target> --timeout 120 --format json "<SQL>"
+python3 scripts/query.py --org <Organization-ID> --base-url <confirmed-api-origin> --timeout 120 --format json "<SQL>"
 ```
 
 ## Establish the Live Encoding
@@ -116,7 +116,7 @@ For OOM analysis, look for a causal chain across node and container exit evidenc
 
 ## Find Who Shared the Node
 
-A memory panic is a property of the node, so the failing query is rarely the whole story. List the heavy queries that overlapped it on the same cluster, then add up their per-node peaks:
+A process memory panic can involve other workload on the node. Follow [Memory incidents](memory.md). List heavy queries whose lifetimes overlapped on the same cluster, then inspect their footprints on the same node:
 
 ```sql
 SELECT
@@ -135,7 +135,7 @@ ORDER BY query_duration_ms DESC
 LIMIT 20;
 ```
 
-Then pick the node ID that appears in the failing query's `peek_memory_usage` map and sum every peak reported for that same node. Two queries each below the per-query ceiling can still cross the node limit together.
+Pick the node ID from the failing query's `peek_memory_usage` map and compare records for that same node. Independent per-query peaks need not occur simultaneously; their sum is a possible-pressure estimate, not measured node usage. Require time-aligned samples to claim concurrent consumption crossed the limit. Two queries each below the per-query ceiling can still contribute to process pressure.
 
 **Extend the window past the incident.** A terminal row is written when a query ends, so a neighbour that was still running at the panic has no row yet. In one investigation the query that supplied the missing 144 GB finished 2m47s *after* the victim died: a window that stopped at the incident instant would have shown nothing and the analysis would have wrongly blamed the victim's own footprint.
 
@@ -157,7 +157,7 @@ Use the local source for every version under comparison to decide whether appare
 
 ## Dialect and Output Compatibility
 
-- Keep `--target` explicit and confirm the org exposes the log schema; never substitute another org's history tables because a query returned nothing.
+- Keep `--org` and the API origin explicit and confirm the org exposes the log schema; never substitute another org's history tables because a query returned nothing. Check stderr for output-cap warnings; a capped result is not a complete export.
 - Optimize the query before raising `--timeout` (whole seconds, default 600).
 - Use explicit `AS` aliases. If `left(message, 500)` is parsed ambiguously, use `substring(message, 1, 500)`.
 - Array length on a VARIANT is `array_length(...)`; `json_array_length` does not exist here.

@@ -53,6 +53,8 @@ class FormatLogHistoryTest(unittest.TestCase):
             input="\n".join(lines) + "\n",
             capture_output=True,
             text=True,
+            env={key: value for key, value in os.environ.items()
+                 if key in ("PATH", "SYSTEMROOT", "WINDIR")},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout

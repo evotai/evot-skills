@@ -1,412 +1,386 @@
 #!/usr/bin/env python3
+"""Offline query/CLI tests. Only invented orgs, IDs, and synthetic credentials."""
+import contextlib
 import io
 import json
+import os
+import tempfile
 import unittest
 import urllib.error
 from unittest import mock
 
 import query
 
-CREDS = {
-    "org": "acme",
-    "token": "t0ken",
-    "host": "api.databend.com",
-    "port": None,
-    "warehouse": "default",
-}
-
-
-def http_error(code, body):
-    return urllib.error.HTTPError(
-        "https://api.databend.com/v1/query", code, "err", {}, io.BytesIO(body.encode())
-    )
-
-
-class ParseDsnTest(unittest.TestCase):
-    def test_full_dsn(self):
-        creds = query.parse_dsn("bendcloud://acme:t0ken@api.databend.com/wh1")
-        self.assertEqual(creds["org"], "acme")
-        self.assertEqual(creds["token"], "t0ken")
-        self.assertEqual(creds["host"], "api.databend.com")
-        self.assertEqual(creds["warehouse"], "wh1")
-
-    def test_warehouse_and_host_default(self):
-        creds = query.parse_dsn("bendcloud://acme:t0ken@")
-        self.assertEqual(creds["host"], query.DEFAULT_HOST)
-        self.assertEqual(creds["warehouse"], query.DEFAULT_WAREHOUSE)
-
-    def test_databend_scheme_allowed(self):
-        self.assertEqual(query.parse_dsn("databend://a:b@h/w")["org"], "a")
-
-    def test_percent_escapes_are_decoded(self):
-        creds = query.parse_dsn("bendcloud://acme:ab%40c%2Fd@api.databend.com/w")
-        self.assertEqual(creds["token"], "ab@c/d")
-
-    def test_port_is_kept(self):
-        self.assertEqual(query.parse_dsn("bendcloud://a:b@localhost:8000/w")["port"], 8000)
-
-    def test_rejects_bad_scheme_and_missing_parts(self):
-        for dsn in ("https://a:b@h/w", "a:b@h/w", "bendcloud://acme@h/w", "bendcloud://:t@h/w"):
-            with self.assertRaises(query.ConfigError):
-                query.parse_dsn(dsn)
-
-
-class SelectDsnTest(unittest.TestCase):
-    def test_plain_variable(self):
-        self.assertEqual(query.select_dsn({"BENDCLOUD_DSN": "dsn0"}), "dsn0")
-
-    def test_named_target_exact_and_normalized(self):
-        env = {"BENDCLOUD_DSN_PROD": "p", "BENDCLOUD_DSN_AVIA_ADMIN": "a"}
-        self.assertEqual(query.select_dsn(env, "PROD"), "p")
-        self.assertEqual(query.select_dsn(env, "avia-admin"), "a")
-
-    def test_plain_wins_over_targets(self):
-        env = {"BENDCLOUD_DSN": "plain", "BENDCLOUD_DSN_PROD": "p"}
-        self.assertEqual(query.select_dsn(env), "plain")
-
-    def test_sole_target_is_implicit(self):
-        self.assertEqual(query.select_dsn({"BENDCLOUD_DSN_ONLY": "o"}), "o")
-
-    def test_ambiguous_targets_are_listed(self):
-        env = {"BENDCLOUD_DSN_A": "a", "BENDCLOUD_DSN_B": "b"}
-        with self.assertRaises(query.ConfigError) as raised:
-            query.select_dsn(env)
-        self.assertIn("--target", str(raised.exception))
-        self.assertIn("A, B", str(raised.exception))
-
-    def test_unknown_target_lists_choices(self):
-        with self.assertRaises(query.ConfigError) as raised:
-            query.select_dsn({"BENDCLOUD_DSN_A": "a"}, "nope")
-        self.assertIn("A", str(raised.exception))
-
-    def test_blank_values_are_ignored(self):
-        with self.assertRaises(query.ConfigError) as raised:
-            query.select_dsn({"BENDCLOUD_DSN": "   "})
-        self.assertIn("/env set", str(raised.exception))
+CREDS = {"org": "acme", "api_key": "synthetic-test-key", "base_url": "https://api.databend.com", "warehouse": "default"}
+SCHEMA = [{"name": "n", "type": "Int"}]
 
 
 class RequestTest(unittest.TestCase):
-    def send(self, opener, url="https://api.databend.com/v1/query", payload=None):
-        with mock.patch.object(query.urllib.request, "urlopen", opener):
-            return query.request(url, {"X-DatabendCloud-Org": "acme"}, payload, 5)
+    def send(self, body=b"{}", error=None, payload=None, response_headers=None):
+        opener = mock.Mock()
+        opener.open.side_effect = error
+        stream = io.BytesIO(body)
+        stream.headers = response_headers or {}
+        opener.open.return_value = stream
+        with mock.patch.object(query.urllib.request, "build_opener", return_value=opener) as factory:
+            result = query.request("https://api.databend.com/v1/query", {}, payload, 5)
+        self.assertIsInstance(factory.call_args.args[0], query.NoRedirect)
+        return result, opener.open.call_args.args[0]
 
-    def test_sets_non_python_user_agent(self):
-        seen = {}
+    def test_post_and_user_agent(self):
+        result, request = self.send(b'{"id":"q"}', payload={"sql": "SELECT 1"})
+        self.assertEqual(result["id"], "q")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.get_header("User-agent"), query.USER_AGENT)
 
-        def opener(req, timeout=None):
-            seen["ua"] = req.get_header("User-agent")
-            seen["method"] = req.get_method()
-            return io.BytesIO(b'{"id":"q"}')
+    def test_gateway_source_is_retained_as_http_metadata_not_json(self):
+        result, _ = self.send(b'{"id":"q","data":[]}', response_headers={"X-Databend-Query-Source": "gateway"})
+        self.assertTrue(result.gateway_local)
+        self.assertNotIn("gateway_local", result)
+        ordinary, _ = self.send(b'{"id":"q","gateway_local":true}')
+        self.assertFalse(ordinary.gateway_local)
 
-        self.assertEqual(self.send(opener, payload={"sql": "SELECT 1"}), {"id": "q"})
-        self.assertEqual(seen["method"], "POST")
-        self.assertEqual(seen["ua"], query.USER_AGENT)
-        self.assertNotIn("python", seen["ua"].lower())
+    def test_get_and_empty_post(self):
+        self.assertEqual(self.send()[1].get_method(), "GET")
+        self.assertEqual(self.send(payload={})[1].get_method(), "POST")
 
-    def test_get_without_payload_keeps_user_agent(self):
-        seen = {}
+    def test_redirect_handler_never_forwards(self):
+        self.assertIsNone(query.NoRedirect().redirect_request(None, None, 302, "", {}, "https://evil.example"))
 
-        def opener(req, timeout=None):
-            seen["ua"] = req.get_header("User-agent")
-            seen["method"] = req.get_method()
-            return io.BytesIO(b"{}")
+    def test_redirect_error_is_not_success(self):
+        error = urllib.error.HTTPError("https://api.databend.com", 302, "redirect", {}, io.BytesIO(b"{}"))
+        with self.assertRaisesRegex(query.QueryError, "redirect refused"):
+            self.send(error=error)
 
-        self.send(opener)
-        self.assertEqual(seen["method"], "GET")
-        self.assertEqual(seen["ua"], query.USER_AGENT)
+    def test_http_json_error(self):
+        error = urllib.error.HTTPError("https://api.databend.com", 400, "bad", {},
+                                       io.BytesIO(b'{"error":{"kind":"BadSQL","message":"bad"}}'))
+        with self.assertRaisesRegex(query.QueryError, "BadSQL"):
+            self.send(error=error)
 
-    def test_json_error_body_is_returned_for_envelope_handling(self):
-        def opener(req, timeout=None):
-            raise http_error(400, '{"error":{"kind":"BadSQL","message":"nope"}}')
+    def test_http_json_without_error_is_not_success(self):
+        error = urllib.error.HTTPError("https://api.databend.com", 403, "bad", {}, io.BytesIO(b"{}"))
+        with self.assertRaisesRegex(query.QueryError, "HTTP 403"):
+            self.send(error=error)
 
-        self.assertEqual(self.send(opener)["error"]["kind"], "BadSQL")
-
-    def test_non_json_error_body_raises_with_status(self):
-        def opener(req, timeout=None):
-            raise http_error(403, "error code: 1010")
-
+    def test_html_error_is_not_echoed(self):
+        error = urllib.error.HTTPError("https://api.databend.com", 403, "bad", {}, io.BytesIO(b"private-proxy-page"))
         with self.assertRaises(query.QueryError) as raised:
-            self.send(opener)
-        self.assertIn("HTTP 403", str(raised.exception))
-        self.assertIn("1010", str(raised.exception))
+            self.send(error=error)
+        self.assertNotIn("private-proxy-page", str(raised.exception))
 
-    def test_unreachable_host_raises(self):
-        def opener(req, timeout=None):
-            raise urllib.error.URLError("no route")
+    def test_network_timeout_and_bad_response(self):
+        for error in (urllib.error.URLError("route"), TimeoutError(), OSError("socket")):
+            with self.subTest(error=error), self.assertRaisesRegex(query.QueryError, "do not blindly resubmit"):
+                self.send(error=error)
+        for body in (b"not-json", b"[]"):
+            with self.assertRaises(query.QueryError):
+                self.send(body)
 
-        with self.assertRaises(query.QueryError) as raised:
-            self.send(opener)
-        self.assertIn("cannot reach", str(raised.exception))
+    def test_empty_cleanup_response_is_accepted(self):
+        self.assertEqual(self.send(b"")[0], {})
 
+    def test_oversized_response_is_bounded(self):
+        with mock.patch.object(query, "MAX_RESPONSE_BYTES", 8):
+            with self.assertRaisesRegex(query.QueryError, "exceeds"):
+                self.send(b"0123456789")
 
-class RaiseForErrorTest(unittest.TestCase):
-    def test_kind_and_code_and_string_shapes(self):
-        with self.assertRaises(query.QueryError) as raised:
-            query.raise_for_error({"error": {"kind": "BadSQL", "message": "boom"}})
-        self.assertIn("BadSQL", str(raised.exception))
-
-        with self.assertRaises(query.QueryError) as raised:
-            query.raise_for_error({"error": {"code": 1008, "message": "no function"}})
-        self.assertIn("1008", str(raised.exception))
-
-        with self.assertRaises(query.QueryError):
-            query.raise_for_error({"error": "AuthFailed"})
-
-    def test_absent_or_null_error_passes(self):
-        query.raise_for_error({"data": []})
-        query.raise_for_error({"error": None})
+    def test_cloud_and_engine_errors(self):
+        for payload in ({"error": "bad"}, {"error": {"code": 1008, "message": "bad"}},
+                        {"code": "AUTH_FAILED", "message": "no"}, {"success": False}):
+            with self.assertRaises(query.QueryError):
+                query.raise_for_error(payload)
+        query.raise_for_error({"error": None, "data": []})
 
 
 class PaginationTest(unittest.TestCase):
-    def paginate(self, pages, timeout=60):
+    def execute(self, pages, creds=None, **kwargs):
         calls = []
+        iterator = iter(pages)
 
         def fake(url, headers, payload=None, timeout=60):
-            calls.append(url)
-            return pages.pop(0) if pages else {"data": []}
-
-        with mock.patch.object(query, "request", fake), mock.patch.object(query.time, "sleep"):
-            schema, rows = query.run_once("SELECT 1", CREDS, timeout)
-        return schema, rows, calls
-
-    def test_empty_page_does_not_end_pagination(self):
-        schema, rows, calls = self.paginate(
-            [
-                {"id": "q1", "schema": [{"name": "a", "type": "Int"}], "data": [[1]],
-                 "next_uri": "/v1/query/q1/page/0"},
-                {"data": [], "next_uri": "/v1/query/q1/page/0"},
-                {"data": [[2]], "next_uri": "/v1/query/q1/page/1"},
-                {"data": [[3]], "next_uri": "/v1/query/q1/final"},
-            ]
-        )
-        self.assertEqual(rows, [[1], [2], [3]])
-        self.assertEqual(schema[0]["name"], "a")
-        self.assertTrue(calls[-1].endswith("/v1/query/q1/final"))
-
-    def test_single_page_query_skips_polling(self):
-        schema, rows, calls = self.paginate([{"id": "q", "schema": [], "data": [[1]], "next_uri": ""}])
-        self.assertEqual(rows, [[1]])
-        self.assertEqual(len(calls), 2)
-
-    def test_first_page_already_final_stops(self):
-        _, rows, calls = self.paginate(
-            [{"id": "q", "schema": [], "data": [[1]], "next_uri": "/v1/query/q/final"}]
-        )
-        self.assertEqual(rows, [[1]])
-        self.assertEqual(len(calls), 2)
-
-    def test_error_on_a_later_page_propagates(self):
-        with self.assertRaises(query.QueryError) as raised:
-            self.paginate(
-                [
-                    {"id": "q", "schema": [], "data": [], "next_uri": "/v1/query/q/page/0"},
-                    {"error": {"kind": "Aborted", "message": "cancelled"}},
-                ]
-            )
-        self.assertIn("Aborted", str(raised.exception))
-
-    def test_error_in_first_response_skips_paging(self):
-        with self.assertRaises(query.QueryError):
-            self.paginate([{"error": {"kind": "BadSQL", "message": "x"}}])
-
-    def test_final_call_failure_is_ignored(self):
-        def fake(url, headers, payload=None, timeout=60):
-            if url.endswith("/final"):
-                raise query.QueryError("final unreachable")
-            return {"id": "q", "schema": [], "data": [[7]], "next_uri": ""}
-
-        with mock.patch.object(query, "request", fake):
-            _, rows = query.run_once("SELECT 7", CREDS, 60)
-        self.assertEqual(rows, [[7]])
-
-    def test_missing_query_id_skips_final(self):
-        calls = []
-
-        def fake(url, headers, payload=None, timeout=60):
-            calls.append(url)
-            return {"schema": [], "data": [[1]], "next_uri": ""}
-
-        with mock.patch.object(query, "request", fake):
-            query.run_once("SELECT 1", CREDS, 60)
-        self.assertFalse(any(url.endswith("/final") for url in calls))
-
-    def test_stalled_pagination_gives_up_at_the_deadline(self):
-        clock = {"now": 0.0}
-
-        def fake(url, headers, payload=None, timeout=60):
-            return {"id": "q", "schema": [], "data": [], "next_uri": "/v1/query/q/page/0"}
-
-        def advance(seconds):
-            clock["now"] += seconds
-
-        with mock.patch.object(query, "request", fake), \
-                mock.patch.object(query.time, "sleep", advance), \
-                mock.patch.object(query.time, "monotonic", lambda: clock["now"]):
-            with self.assertRaises(query.QueryError) as raised:
-                query.run_once("SELECT 1", CREDS, 1)
-        self.assertIn("still paging", str(raised.exception))
-        self.assertIn("q", str(raised.exception))
-
-    def test_headers_carry_org_token_and_warehouse(self):
-        seen = {}
-
-        def fake(url, headers, payload=None, timeout=60):
-            seen.update(headers)
-            return {"id": "q", "schema": [], "data": [], "next_uri": ""}
-
-        with mock.patch.object(query, "request", fake):
-            query.run_once("SELECT 1", CREDS, 60)
-        self.assertEqual(seen["X-DatabendCloud-Token"], "t0ken")
-        self.assertEqual(seen["X-DatabendCloud-Org"], "acme")
-        self.assertEqual(seen["X-DatabendCloud-Warehouse"], "default")
-
-
-class RetryTest(unittest.TestCase):
-    def run_with(self, outcomes):
-        state = {"n": 0}
-
-        def fake(sql, creds, timeout):
-            item = outcomes[state["n"]]
-            state["n"] += 1
+            calls.append((url, headers, payload, timeout))
+            if url.endswith(("/final", "/kill")):
+                return {}
+            item = next(iterator)
             if isinstance(item, Exception):
                 raise item
             return item
 
-        with mock.patch.object(query, "run_once", fake), mock.patch.object(query.time, "sleep"):
-            result = query.run("SELECT 1", CREDS, 60)
-        return result, state["n"]
+        with mock.patch.object(query, "request", fake), mock.patch.object(query.time, "sleep"), \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            result = query.run_once("SELECT 1", creds or CREDS, 60, **kwargs)
+        return result, calls, err.getvalue()
 
-    def test_provisioning_error_is_retried(self):
-        result, attempts = self.run_with(
-            [query.QueryError("ProvisionWarehouseTimeout: cold"), ([], [[1]])]
-        )
+    def test_schema_can_arrive_after_empty_first_page(self):
+        result, calls, _ = self.execute([
+            {"id": "q", "data": [], "next_uri": "/v1/query/q/page/0"},
+            {"schema": SCHEMA, "data": [[1]], "next_uri": "/v1/query/q/page/1"},
+            {"data": [[2]], "next_uri": "/v1/query/q/final"},
+        ])
+        self.assertEqual(result, (SCHEMA, [[1], [2]]))
+        self.assertTrue(calls[-1][0].endswith("/final"))
+        self.assertFalse(any(call[0].endswith("/kill") for call in calls))
+
+    def test_china_query_pages_and_cleanup_stay_on_china(self):
+        result, calls, _ = self.execute([
+            {"id": "q", "data": [], "next_uri": "/v1/query/q/page/0"},
+            {"schema": SCHEMA, "data": [[1]], "next_uri": "/v1/query/q/final"},
+        ], creds={**CREDS, "base_url": "https://api.databend.cn"})
         self.assertEqual(result[1], [[1]])
-        self.assertEqual(attempts, 2)
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(call[0].startswith("https://api.databend.cn/v1/query") for call in calls))
 
-    def test_retries_are_bounded(self):
-        with mock.patch.object(query, "run_once",
-                               mock.Mock(side_effect=query.QueryError("ProvisionWarehouse: x"))) as run_once, \
-                mock.patch.object(query.time, "sleep"):
-            with self.assertRaises(query.QueryError):
-                query.run("SELECT 1", CREDS, 60)
-        self.assertEqual(run_once.call_count, 3)
+    def test_gateway_management_result_does_not_poll_or_finalize_compute(self):
+        result, calls, _ = self.execute([query.QueryResponse({
+            "id": "management-query", "schema": SCHEMA, "data": [[1]], "state": "Succeeded"
+        }, gateway_local=True)])
+        self.assertEqual(result, (SCHEMA, [[1]]))
+        self.assertEqual(len(calls), 1)
 
-    def test_non_retryable_fails_on_first_attempt(self):
-        with self.assertRaises(query.QueryError):
-            self.run_with([query.QueryError("BadSQL: nope")])
+    def test_zero_row_gateway_change_is_success_without_engine_cleanup(self):
+        result, calls, _ = self.execute([query.QueryResponse({
+            "id": "management-query", "schema": [], "data": [], "state": "Succeeded"
+        }, gateway_local=True)])
+        self.assertEqual(result, ([], []))
+        self.assertEqual(len(calls), 1)
 
-    def test_auth_failure_is_not_retried(self):
-        with mock.patch.object(query, "run_once",
-                               mock.Mock(side_effect=query.QueryError("AuthFailed"))) as run_once, \
-                mock.patch.object(query.time, "sleep"):
-            with self.assertRaises(query.QueryError):
-                query.run("SELECT 1", CREDS, 60)
-        self.assertEqual(run_once.call_count, 1)
+    def test_gateway_errors_do_not_issue_engine_kill_or_final(self):
+        response = query.QueryResponse({"id": "management-query", "error": {"kind": "Denied"}}, gateway_local=True)
+        request = mock.Mock(return_value=response)
+        with mock.patch.object(query, "request", request), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(query.QueryError, "Denied"):
+                query.run_once("SHOW WAREHOUSES", CREDS, 60)
+        self.assertEqual(request.call_count, 1)
 
+    def test_gateway_output_cap_is_reported_without_cancellation(self):
+        result, calls, error = self.execute([query.QueryResponse({
+            "id": "management-query", "schema": SCHEMA, "data": [[1], [2]], "state": "Succeeded"
+        }, gateway_local=True)], max_rows=1)
+        self.assertEqual(result[1], [[1]])
+        self.assertEqual(len(calls), 1)
+        self.assertIn("truncated", error)
 
-class BaseUrlTest(unittest.TestCase):
-    def test_default_and_explicit_port(self):
-        self.assertEqual(query.base_url(CREDS), "https://api.databend.com")
-        self.assertEqual(query.base_url({**CREDS, "host": "localhost", "port": 8000}),
-                         "https://localhost:8000")
+    def test_gateway_continuation_is_rejected_without_engine_requests(self):
+        response = query.QueryResponse({"id": "management-query", "next_uri": "/v1/query/management-query/page/0"}, gateway_local=True)
+        request = mock.Mock(return_value=response)
+        with mock.patch.object(query, "request", request), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(query.QueryError, "Unexpected continuation"):
+                query.run_once("SHOW WAREHOUSES", CREDS, 60)
+        self.assertEqual(request.call_count, 1)
 
+    def test_empty_page_repeats_are_polled(self):
+        result, _, _ = self.execute([
+            {"id": "q", "data": [], "next_uri": "/v1/query/q/page/0"},
+            {"data": [], "next_uri": "/v1/query/q/page/0"},
+            {"schema": SCHEMA, "data": [[1]], "next_uri": "/v1/query/q/final"},
+        ])
+        self.assertEqual(result[1], [[1]])
 
-class RenderTableTest(unittest.TestCase):
-    def render(self, schema, rows):
-        buffer = io.StringIO()
-        with mock.patch("sys.stdout", buffer):
-            query.render_table(schema, rows)
-        return buffer.getvalue()
+    def test_single_page_and_headers(self):
+        result, calls, _ = self.execute([{"id": "q", "schema": SCHEMA, "data": [[1]], "next_uri": ""}])
+        self.assertEqual(result[1], [[1]])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][1]["X-DatabendCloud-Token"], CREDS["api_key"])
+        self.assertEqual(calls[0][1]["X-DatabendCloud-Org"], "acme")
+        self.assertEqual(calls[0][1]["X-DatabendCloud-Warehouse"], "default")
 
-    def test_nulls_widths_and_row_count(self):
-        out = self.render(
-            [{"name": "id", "type": "Int"}, {"name": "note", "type": "String"}],
-            [[1, None], [2, "hi"]],
-        )
-        self.assertIn("NULL", out)
-        self.assertIn("(2 rows)", out)
+    def test_cap_cancels_and_finalizes_without_fetching_more(self):
+        result, calls, err = self.execute([
+            {"id": "q", "schema": SCHEMA, "data": [[1], [2]], "next_uri": "/v1/query/q/page/0"}
+        ], max_rows=1)
+        self.assertEqual(result[1], [[1]])
+        self.assertIn("capped", err)
+        self.assertEqual([call[0].rsplit("/", 1)[-1] for call in calls], ["query", "kill", "final"])
+        self.assertEqual(calls[1][2], {})
 
-    def test_empty_result_reports_zero_rows(self):
-        self.assertEqual(self.render([{"name": "a", "type": "Int"}], []).strip(), "(0 rows)")
+    def test_final_page_truncation_is_reported(self):
+        for uri in ("", "/v1/query/q/final"):
+            _, calls, err = self.execute([
+                {"id": "q", "schema": SCHEMA, "data": [[1], [2]], "next_uri": uri}
+            ], max_rows=1)
+            self.assertIn("truncated", err)
+            self.assertFalse(any(call[0].endswith("/kill") for call in calls))
 
-    def test_utc_notice_only_when_time_columns_present(self):
-        self.assertIn("UTC", self.render([{"name": "event_time", "type": "Timestamp"}], [["x"]]))
-        self.assertNotIn("UTC", self.render([{"name": "id", "type": "Int"}], [[1]]))
+    def test_foreign_query_or_origin_is_rejected(self):
+        for uri in ("https://evil.example/v1/query/q/page/0", "//evil.example/v1/query/q/page/0",
+                    "/v1/query/other/page/0", "/api/v1/my/orgs", "/v1/query/q/page/0?secret=x",
+                    "/v1/query/q/page/0#fragment"):
+            calls = []
 
-    def test_long_values_are_truncated(self):
-        out = self.render([{"name": "sql", "type": "String"}], [["x" * 200]])
-        self.assertIn("...", out)
-        self.assertTrue(all(len(line) < 200 for line in out.splitlines()))
+            def fake(url, headers, payload=None, timeout=60):
+                calls.append(url)
+                return {"id": "q", "next_uri": uri} if url.endswith("/query") else {}
+
+            with self.subTest(uri=uri), mock.patch.object(query, "request", fake), \
+                    contextlib.redirect_stderr(io.StringIO()), self.assertRaises(query.QueryError):
+                query.run_once("SELECT 1", CREDS, 60)
+            self.assertTrue(all(url.startswith(CREDS["base_url"] + "/v1/query") for url in calls))
+            self.assertEqual(len(calls), 3)
+
+    def test_absolute_same_origin_page_allowed(self):
+        result, _, _ = self.execute([
+            {"id": "q", "next_uri": "https://api.databend.com/v1/query/q/page/0"},
+            {"schema": SCHEMA, "data": [[3]], "next_uri": ""},
+        ])
+        self.assertEqual(result[1], [[3]])
+
+    def test_page_error_still_cleans_up(self):
+        calls = []
+
+        def fake(url, headers, payload=None, timeout=60):
+            calls.append(url)
+            if url.endswith("/query"):
+                return {"id": "q", "next_uri": "/v1/query/q/page/0"}
+            if "/page/" in url:
+                return {"error": {"kind": "Aborted"}}
+            return {}
+
+        with mock.patch.object(query, "request", fake), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(query.QueryError, "Aborted"):
+                query.run_once("SELECT 1", CREDS, 60)
+        self.assertTrue(calls[-2].endswith("/kill"))
+        self.assertTrue(calls[-1].endswith("/final"))
+
+    def test_no_automatic_resubmission(self):
+        runner = mock.Mock(side_effect=query.QueryError("ProvisionWarehouseTimeout"))
+        with mock.patch.object(query, "run_once", runner), self.assertRaises(query.QueryError):
+            query.run("INSERT INTO t VALUES (1)", CREDS, 60)
+        self.assertEqual(runner.call_count, 1)
+
+    def test_unknown_query_id_is_not_used_for_cleanup(self):
+        for value in (None, "", "../other", "bad/id"):
+            fake = mock.Mock(return_value={"id": value, "data": []})
+            with mock.patch.object(query, "request", fake), self.assertRaises(query.QueryError):
+                query.run_once("SELECT 1", CREDS, 60)
+            self.assertEqual(fake.call_count, 1)
+
+    def test_deadline_cleans_up(self):
+        clock = {"time": 0}
+        calls = []
+
+        def fake(url, headers, payload=None, timeout=60):
+            calls.append(url)
+            return {"id": "q", "data": [], "next_uri": "/v1/query/q/page/0"} if not url.endswith(("/kill", "/final")) else {}
+
+        def sleep(seconds):
+            clock["time"] += seconds
+
+        with mock.patch.object(query, "request", fake), mock.patch.object(query.time, "sleep", sleep), \
+                mock.patch.object(query.time, "monotonic", lambda: clock["time"]), \
+                contextlib.redirect_stderr(io.StringIO()), self.assertRaisesRegex(query.QueryError, "deadline exceeded"):
+            query.run_once("SELECT 1", CREDS, 1)
+        self.assertTrue(calls[-1].endswith("/final"))
+
+    def test_malformed_data_and_failed_state_raise(self):
+        for page in ({"id": "q", "data": ["not-a-row"]},
+                     {"id": "q", "schema": "not-a-schema"},
+                     {"id": "q", "state": "Failed"}):
+            with self.subTest(page=page), self.assertRaises(query.QueryError):
+                self.execute([page])
+
+    def test_cleanup_failure_is_visible_and_does_not_hide_result(self):
+        def fake(url, headers, payload=None, timeout=60):
+            if url.endswith("/final"):
+                raise query.QueryError(CREDS["api_key"])
+            return {"id": "q", "schema": SCHEMA, "data": [[1]]}
+
+        with mock.patch.object(query, "request", fake), contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(query.run_once("SELECT 1", CREDS, 60)[1], [[1]])
+        self.assertIn("finalization could not be confirmed", err.getvalue())
+        self.assertNotIn(CREDS["api_key"], err.getvalue())
 
 
 class MainTest(unittest.TestCase):
-    def invoke(self, argv, env, runner=None):
-        out, err = io.StringIO(), io.StringIO()
-        runner = runner or (lambda sql, creds, timeout: ([{"name": "a", "type": "Int"}], [[1]]))
-        with mock.patch.object(query.sys, "argv", ["query.py", *argv]), \
-                mock.patch.dict(query.os.environ, env, clear=True), \
-                mock.patch.object(query, "run", runner), \
-                mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
-            code = query.main()
-        return code, out.getvalue(), err.getvalue()
+    def invoke(self, argv, env=None, runner=None):
+        with tempfile.TemporaryDirectory() as directory:
+            values = {"XDG_CONFIG_HOME": directory, **(env or {})}
+            out, err = io.StringIO(), io.StringIO()
+            runner = runner or mock.Mock(return_value=(SCHEMA, [[1]]))
+            with mock.patch.dict(os.environ, values, clear=True), mock.patch.object(query, "run", runner), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    code = query.main(argv)
+                except SystemExit as error:
+                    code = error.code
+            return code, out.getvalue(), err.getvalue(), runner
 
-    def test_missing_config_exits_2_with_actionable_hint(self):
-        code, _, err = self.invoke(["SELECT 1"], {})
-        self.assertEqual(code, 2)
-        self.assertIn("/env set BENDCLOUD_DSN=", err)
-
-    def test_query_failure_exits_1(self):
-        def boom(sql, creds, timeout):
-            raise query.QueryError("AuthFailed")
-
-        code, _, err = self.invoke(
-            ["SELECT 1"], {"BENDCLOUD_DSN": "bendcloud://a:b@h/w"}, runner=boom
-        )
-        self.assertEqual(code, 1)
-        self.assertIn("AuthFailed", err)
-
-    def test_success_exits_0_as_table(self):
-        code, out, _ = self.invoke(["SELECT 1"], {"BENDCLOUD_DSN": "bendcloud://a:b@h/w"})
+    def test_api_key_and_org(self):
+        code, out, err, runner = self.invoke(["--org", "acme", "SELECT 1"], {"DATABEND_CLOUD_API_KEY": CREDS["api_key"]})
         self.assertEqual(code, 0)
         self.assertIn("(1 rows)", out)
+        self.assertNotIn(CREDS["api_key"], err)
+        self.assertEqual(runner.call_args.args[1]["org"], "acme")
 
-    def test_json_format_emits_schema_then_rows(self):
-        code, out, _ = self.invoke(
-            ["--format", "json", "SELECT 1"], {"BENDCLOUD_DSN": "bendcloud://a:b@h/w"}
-        )
-        lines = out.strip().splitlines()
+    def test_missing_config_exits_2(self):
+        code, _, err, runner = self.invoke(["--org", "acme", "SELECT 1"])
+        self.assertEqual(code, 2)
+        self.assertIn("set-key", err)
+        runner.assert_not_called()
+
+    def test_jsonl_schema_and_exact_values(self):
+        code, out, _, _ = self.invoke(["--format", "json", "--org", "acme", "SELECT 1"],
+                                     {"DATABEND_CLOUD_API_KEY": CREDS["api_key"]})
         self.assertEqual(code, 0)
-        self.assertEqual(json.loads(lines[0])[0]["name"], "a")
-        self.assertEqual(json.loads(lines[1]), [1])
+        self.assertEqual([json.loads(line) for line in out.splitlines()], [SCHEMA, [1]])
 
-    def test_warehouse_flag_overrides_the_dsn(self):
-        seen = {}
+    def test_errors_redact_token(self):
+        runner = mock.Mock(side_effect=query.QueryError("rejected " + CREDS["api_key"]))
+        code, _, err, _ = self.invoke(["--org", "acme", "SELECT 1"],
+                                     {"DATABEND_CLOUD_API_KEY": CREDS["api_key"]}, runner)
+        self.assertEqual(code, 1)
+        self.assertIn("[REDACTED]", err)
+        self.assertNotIn(CREDS["api_key"], err)
 
-        def capture(sql, creds, timeout):
-            seen.update(creds)
-            return [], []
+    def test_host_dsns_do_not_satisfy_missing_api_key(self):
+        for name in ("BENDCLOUD_DSN", "BENDCLOUD_DSN_TEST_ORG"):
+            for argv in (["--org", "test-org", "SELECT 1"], ["--org", "test-org-two", "SELECT 1"]):
+                with self.subTest(variable=name, argv=argv):
+                    code, _, err, runner = self.invoke(argv, {
+                        name: "bendcloud://test-org:synthetic-old-key@api.example.invalid/default"})
+                    self.assertEqual(code, 2)
+                    self.assertIn("set-key", err)
+                    self.assertNotIn("synthetic-old-key", err)
+                    runner.assert_not_called()
 
-        self.invoke(
-            ["--warehouse", "big", "SELECT 1"],
-            {"BENDCLOUD_DSN": "bendcloud://a:b@h/small"},
-            runner=capture,
-        )
-        self.assertEqual(seen["warehouse"], "big")
+    def test_host_dsns_cannot_supply_organization(self):
+        code, _, err, runner = self.invoke(["SELECT 1"], {
+            "DATABEND_CLOUD_API_KEY": CREDS["api_key"],
+            "BENDCLOUD_DSN": "bendcloud://wrong:fake@api.databend.com/default"})
+        self.assertEqual(code, 2)
+        self.assertIn("--org", err)
+        runner.assert_not_called()
 
-    def test_target_flag_picks_the_named_dsn(self):
-        seen = {}
+    def test_obsolete_target_option_is_rejected(self):
+        code, _, err, runner = self.invoke(["--org", "test-org", "--target", "test-alias", "SELECT 1"], {
+            "BENDCLOUD_DSN_TEST_ORG": "bendcloud://test-org:synthetic-unused-key@api.example.invalid/default"})
+        self.assertEqual(code, 2)
+        self.assertIn("unrecognized arguments", err)
+        runner.assert_not_called()
 
-        def capture(sql, creds, timeout):
-            seen.update(creds)
-            return [], []
+    def test_api_key_model_ignores_unrelated_host_dsn(self):
+        code, _, err, runner = self.invoke(["--org", "acme", "SELECT 1"], {
+            "DATABEND_CLOUD_API_KEY": CREDS["api_key"],
+            "BENDCLOUD_DSN": "bendcloud://wrong:fake@wrong.example/wrong"})
+        self.assertEqual(code, 0)
+        selected = runner.call_args.args[1]
+        self.assertEqual(selected["org"], "acme")
+        self.assertEqual(selected["warehouse"], "default")
+        self.assertEqual(selected["base_url"], "https://api.databend.com")
+        self.assertNotIn("wrong", err)
 
-        self.invoke(
-            ["--target", "prod", "SELECT 1"],
-            {"BENDCLOUD_DSN_PROD": "bendcloud://prod:tok@h/w",
-             "BENDCLOUD_DSN_DEV": "bendcloud://dev:tok@h/w"},
-            runner=capture,
-        )
-        self.assertEqual(seen["org"], "prod")
+    def test_org_required_and_context_is_not_a_cli_option(self):
+        for argv in (["SELECT 1"], ["--org", "acme", "--context", "alias", "SELECT 1"]):
+            code, _, _, runner = self.invoke(argv)
+            self.assertEqual(code, 2)
+            runner.assert_not_called()
+
+    def test_table_truncates_and_marks_utc(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            query.render_table([{"name": "event_time", "type": "Timestamp"}], [["x" * 100], [None]])
+        self.assertIn("UTC", output.getvalue())
+        self.assertIn("...", output.getvalue())
+        self.assertIn("NULL", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
-  "summary": "Query and diagnose Databend",
-  "example": "databend-cloud: Find slow queries and explain why"
+  "summary": "Query Databend Cloud and investigate incidents",
+  "example": "databend-cloud: Investigate this alert and identify the root cause"
 }
