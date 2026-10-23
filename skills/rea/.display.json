@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Reverse engineer shipped software through REA CLI",
+  "example": "rea: Recover this binary's algorithm with evidence and source"
+}

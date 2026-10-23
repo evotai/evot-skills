@@ -21,6 +21,15 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | `databend-cloud` | Connect, query, manage authorized resources, and investigate Databend Cloud incidents | `python3`, private API key file or environment key; optional `jq` for readable log exports |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Browse, research, and automate the web | `opencli` |
+| `rea` | Reverse engineer binaries, containers, and packaged applications through REA CLI with reproducible evidence and reconstructed source | Compatible Node.js and working REA CLI; task-specific REA backends, Docker for container tasks |
+
+### REA in evot
+
+[rea/SKILL.md](skills/rea/SKILL.md) is a concise **CLI-only adaptation of the official REA skill**, with its six playbooks loaded only as needed. [Upstream provenance](skills/rea/UPSTREAM.md) pins the source commit, records local changes and preserves the MIT license. This is an adapted selection, not an unchanged upstream distribution.
+
+Use REA's installed CLI commands and supported backends; no MCP registration, bridge-dependent provider, direct alternative analysis tool or custom-parser fallback. [Connection and recovery](skills/rea/references/connection-and-recovery.md) automatically diagnoses runner/provider failures and configures unambiguous existing installations for the task. Downloads, builds, installations and persistent edits require scoped approval; after approval the agent completes setup, verifies the actual backend operation and resumes, without registering MCP. Compatible Node.js and a working REA CLI are required. Each invocation is independent: [Evidence workflows](skills/rea/references/evidence-workflows.md) use saved portable records or explicit bundles, not assumed cross-process session IDs.
+
+No evot binary change is needed. Once published, install with `/skill install rea`; normal official-skill updates apply. Installing instructions does not install REA/engines or register MCP. Shell/file tools can stage approved inputs, process saved Evidence and compile/test reconstructed code. Source requests still require actual reconstructed files/tests, not claims of original vendor source.
 
 ### Databend Cloud in any agent
 

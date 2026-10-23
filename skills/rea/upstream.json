@@ -1,0 +1,57 @@
+{
+  "repository": "https://github.com/morluto/rea",
+  "commit": "60accad2de8f2862fe91901502fe26cc5390fb36",
+  "license": "MIT",
+  "profile": "cli-only",
+  "reviewed": "2026-10-23",
+  "files": [
+    {
+      "path": "LICENSE",
+      "local_path": "LICENSE",
+      "sha256": "798f9e4d18e49b30bf2f12696c8ced73dc4e1413da375a333d01281543a1ea8b",
+      "mode": "verbatim"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/SKILL.md",
+      "local_path": "SKILL.md",
+      "sha256": "42eaf3fbf581274071c4069b1a3f04a6a6363539635f20fb0a752eac831b598c",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/connection-and-recovery.md",
+      "local_path": "references/connection-and-recovery.md",
+      "sha256": "e6bb0289dade4bfc84bd91cf5b1b0ba5893e9d7f0c963f97ad53ef5e253c40af",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/native-and-artifacts.md",
+      "local_path": "references/native-and-artifacts.md",
+      "sha256": "b7cd2bb0b5bdf0ebc35fce4ab64206b95b9cdcab9ed5d2283089212e24608b94",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/javascript-applications.md",
+      "local_path": "references/javascript-applications.md",
+      "sha256": "9003206fb2bb70d0db65c6cb49d3e62b7a4e46d8697100b683d11e9a4e9b0dbd",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/android-applications.md",
+      "local_path": "references/android-applications.md",
+      "sha256": "ae78da20a572e92a1d5fac3f9fdf10caa7ed09fe0b6c9132b4e878470c28f9c0",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/runtime-observation.md",
+      "local_path": "references/runtime-observation.md",
+      "sha256": "da6728e31648a47444d3282fdb3fd17eaab38c0715ac987b6d410c0473ec8036",
+      "mode": "adapted-selection"
+    },
+    {
+      "path": ".agents/skills/reverse-engineer-anything/references/evidence-workflows.md",
+      "local_path": "references/evidence-workflows.md",
+      "sha256": "229da00674c160b45d0618d2d0fc03a85a23552f34a54866735f6f733d2d8f40",
+      "mode": "adapted-selection"
+    }
+  ]
+}

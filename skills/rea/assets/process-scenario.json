@@ -1,0 +1,23 @@
+{
+  "executable": "/absolute/path/to/approved/program",
+  "arguments": [],
+  "working_directory": "/absolute/path/to/analysis/repro",
+  "environment": {},
+  "filesystem_observation_paths": [],
+  "timeout_ms": 30000,
+  "idle_timeout_ms": 15000,
+  "settle_ms": 100,
+  "terminal": {
+    "columns": 160,
+    "rows": 24,
+    "scrollback": 0
+  },
+  "limits": {
+    "output_bytes": 4000000
+  },
+  "normalization": {
+    "paths": false,
+    "pids": false,
+    "ports": false
+  }
+}
