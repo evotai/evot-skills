@@ -13,7 +13,12 @@ Give the matching console token-creation path and one copyable `set-key --base-u
 | China | `https://app.databend.cn` | `https://api.databend.cn` |
 | International | `https://app.databend.com` | `https://api.databend.com` |
 
-Create a **personal API token**, not a SQL password, under **Admin → API Tokens → Access Tokens → Generate New Token**. It belongs to an account and accesses active org memberships subject to their roles. Token names do not restrict permissions. Revoke tokens in the console.
+Create a **personal API token**, not a SQL password, using the standalone account-token entry at the bottom of the console sidebar, outside Admin:
+
+- International UI: **Account API Tokens → Access Tokens → Generate New Token**.
+- China UI: **账户 API 令牌 → 访问令牌 → 生成新令牌**.
+
+The token belongs to an account and accesses active org memberships subject to their roles. Token names do not restrict permissions. Revoke tokens in the console.
 
 The API origin is HTTPS without a path suffix, not a tenant SQL gateway. Never retry a failure at another site or assume credentials/org memberships are interchangeable.
 

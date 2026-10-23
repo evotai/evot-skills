@@ -2,6 +2,11 @@
 
 Versions here identify the skill, not a Databend Cloud server release. Dates are UTC.
 
+## 1.0.1 — 2026-10-23
+
+- Update token creation guidance to the standalone **Account API Tokens** sidebar entry.
+- Use **账户 API 令牌 → 访问令牌 → 生成新令牌** for the China console.
+
 ## 1.0.0 — 2026-10-19
 
 First explicitly versioned skill revision. Local changes are not a published repository release until committed and released.

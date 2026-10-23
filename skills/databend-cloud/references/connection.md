@@ -21,9 +21,9 @@ Reuse the supported private file or bound environment key. Do not display key fi
 
 ## Short reply when the key is missing
 
-Use the user's language and selected endpoint. Substitute the actual absolute, shell-quoted script path. Give one command, not a long analysis plan or several storage alternatives:
+Use the user's language and selected endpoint. The token entry is a standalone item at the bottom of the sidebar, not inside Admin. Use **Account API Tokens → Access Tokens → Generate New Token** for the international UI or **账户 API 令牌 → 访问令牌 → 生成新令牌** for China. Substitute that path and the actual absolute, shell-quoted script path in this short reply:
 
-> First-time setup needs a Databend Cloud personal API token. Create one at `<console-url>` under **Admin → API Tokens → Access Tokens → Generate New Token**.
+> First-time setup needs a Databend Cloud personal API token. Create one at `<console-url>` under **<selected-site account-token path>**.
 >
 > Run this in your private terminal and paste the token. Stars and the character count confirm input. Enter shows a masked preview and saves; empty input retries. Do not send the key in chat:
 >

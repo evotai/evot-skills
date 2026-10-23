@@ -4,8 +4,8 @@ description: Connect to Databend Cloud, configure API keys, select organizations
 license: Apache-2.0
 compatibility: Requires Python 3 and HTTPS access to the Cloud API. jq is optional and needed only for readable log exports. Works with any agent that can read files and execute commands.
 metadata:
-  version: "1.0.0"
-  updated_at: "2026-10-19"
+  version: "1.0.1"
+  updated_at: "2026-10-23"
   evot:
     requires:
       bins: [python3]
