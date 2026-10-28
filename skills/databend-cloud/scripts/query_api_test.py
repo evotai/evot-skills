@@ -92,12 +92,23 @@ class QueryAPITest(unittest.TestCase):
             self.assertEqual(code, 2)
             request.assert_not_called()
 
-    def test_org_is_required_and_no_context_option_exists(self):
-        for argv in (["status", "q"], ["status", "q", "--org", "acme", "--context", "alias"]):
-            code, _, _, request, resolver = self.invoke(argv, add_org=False)
-            self.assertEqual(code, 2)
-            request.assert_not_called()
-            resolver.assert_not_called()
+    def test_no_context_option_exists(self):
+        code, _, _, request, resolver = self.invoke(["status", "q", "--org", "acme", "--context", "alias"], add_org=False)
+        self.assertEqual(code, 2)
+        request.assert_not_called()
+        resolver.assert_not_called()
+
+    def test_missing_org_and_target_is_a_configuration_error(self):
+        code, _, error, request, _ = self.invoke(["status", "q"], add_org=False,
+                                                 config_error=cloud_config.ConfigError("Organization is required; pass --org"))
+        self.assertEqual(code, 2)
+        self.assertIn("--org", error)
+        request.assert_not_called()
+
+    def test_target_option_is_forwarded_to_resolver(self):
+        code, _, _, _, resolver = self.invoke(["status", "q", "--target", "logs"], add_org=False)
+        self.assertEqual(code, 0)
+        self.assertEqual(resolver.call_args.args[0].target, "logs")
 
     def test_missing_key_stops_before_network(self):
         code, _, error, request, _ = self.invoke(["status", "q"], config_error=cloud_config.ConfigError("set-key first"))

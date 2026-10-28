@@ -227,7 +227,8 @@ def main(argv=None):
     except ConfigError as error:
         print(error, file=sys.stderr)
         return 2
-    print(f"org={creds['org']} warehouse={creds['warehouse']} base_url={creds['base_url']}", file=sys.stderr)
+    label = f"target={creds['target']} " if creds.get("target") else ""
+    print(f"{label}org={creds['org']} warehouse={creds['warehouse']} base_url={creds['base_url']}", file=sys.stderr)
     try:
         schema, rows = run(args.sql, creds, args.timeout, args.max_rows)
     except (QueryError, KeyboardInterrupt) as error:

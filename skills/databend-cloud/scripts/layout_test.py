@@ -59,11 +59,23 @@ class LayoutTest(unittest.TestCase):
         self.assertRegex(self.main, r'updated_at: "\d{4}-\d{2}-\d{2}"')
         self.assertTrue((ROOT / "CHANGELOG.md").is_file())
 
-    def test_no_alias_registry_in_guides(self):
+    def test_no_legacy_context_or_dsn_registry_in_guides(self):
         for path in [ROOT / "SKILL.md", *(ROOT / "references").rglob("*.md")]:
-            for obsolete in ("--context", "set-context", "list-contexts", "--config-file", "DATABEND_CLOUD_CONTEXT", "config.json"):
+            for obsolete in ("--context", "set-context", "list-contexts", "--config-file", "DATABEND_CLOUD_CONTEXT",
+                             "config.json", "BENDCLOUD_DSN"):
                 with self.subTest(file=path.name, removed=obsolete):
                     self.assertNotIn(obsolete, path.read_text())
+
+    def test_target_registry_is_resolved_before_asking(self):
+        before = self.main.split("## Helpers")[0]
+        self.assertIn("list-targets", before)
+        self.assertIn("set-target", before)
+        self.assertIn("no default or active target", self.main)
+        organizations = (ROOT / "references/organizations.md").read_text()
+        self.assertIn("targets.json", organizations)
+        self.assertIn("list-targets", organizations)
+        self.assertIn("remove-target", organizations)
+        self.assertIn("list-targets", (ROOT / "references/troubleshooting/index.md").read_text())
 
     def test_one_runtime_and_no_parity_cruft(self):
         for name in ("cloud_config.py", "secret_input.py", "query.py", "query_api.py", "format_log_history.jq"):

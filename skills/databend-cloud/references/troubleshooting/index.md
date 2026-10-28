@@ -22,7 +22,7 @@ Map an alert's fields before querying:
 | `error` | Surfaced symptom, such as memory panic, UDF failure, or cancellation; not proof of the cause. |
 | `time:` footer | Parse its explicit timezone. Original alert footers can be UTC, while chat-rendered times can be CST/UTC+8. |
 
-A shared admin log org may contain a monitored tenant's events. If that is needed, ask the user to explicitly select/authorize its Organization ID and API origin; do not probe other orgs to find logs. Confirm the subject by query ID and tenant ID rather than substituting the log org's own tenant identity. If the confirmed org lacks logs, stop and report the missing access or incorrect log-serving org.
+A shared admin log org may contain a monitored tenant's events. Check `cloud_config.py list-targets` first: a target whose note names the customer or "admin log" is the authorized log-serving org, so state it and proceed. Only when no target matches, ask the user to select/authorize its Organization ID and API origin; do not probe other orgs to find logs. Confirm the subject by query ID and tenant ID rather than substituting the log org's own tenant identity. If the confirmed org lacks logs, stop and report the missing access or incorrect log-serving org.
 
 Write predicates in UTC. Convert a confirmed UTC+8 timestamp by subtracting eight hours, but do not shift a timestamp already marked UTC or `Z`. State both the user-facing incident time and the UTC scan window.
 

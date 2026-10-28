@@ -24,7 +24,7 @@ class ConfigTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.env = {"XDG_CONFIG_HOME": self.temp.name}
         self.directory = Path(self.temp.name) / "databend-cloud"
-        self.args = argparse.Namespace(credentials_file=None, base_url=None, org="acme", warehouse=None)
+        self.args = argparse.Namespace(credentials_file=None, base_url=None, org="acme", warehouse=None, target=None)
 
     def save(self, origin=COM, key=KEY):
         path = config.credential_path(self.args, self.env, origin)
@@ -51,7 +51,8 @@ class ConfigTest(unittest.TestCase):
         selected = self.resolve()
         self.assertEqual((selected["base_url"], selected["org"], selected["warehouse"]), (COM, "acme", "default"))
         self.assertEqual(selected["api_key"], KEY)
-        self.assertEqual(set(selected), {"base_url", "org", "warehouse", "api_key", "credential_source"})
+        self.assertEqual(set(selected), {"base_url", "org", "warehouse", "api_key", "credential_source", "target"})
+        self.assertIsNone(selected["target"])
 
     def test_same_key_supports_several_explicit_orgs(self):
         self.save()
@@ -90,7 +91,7 @@ class ConfigTest(unittest.TestCase):
         self.save()
         code, out, _ = self.invoke(["show", "--org", "acme"])
         self.assertEqual(code, 0)
-        self.assertEqual(set(json.loads(out)), {"base_url", "org", "warehouse", "credential_source"})
+        self.assertEqual(set(json.loads(out)), {"base_url", "org", "warehouse", "credential_source", "target"})
 
     def test_no_context_commands_or_options(self):
         for argv in (["set-context", "x", "--org", "acme"], ["list-contexts"],
@@ -101,6 +102,88 @@ class ConfigTest(unittest.TestCase):
         self.save()
         (self.directory / "config.json").write_text("not-json")
         self.assertEqual(self.resolve(DATABEND_CLOUD_CONTEXT="unused", DATABEND_CLOUD_CONFIG_FILE="missing")["org"], "acme")
+
+    def set_target(self, name="avia", org="org-synthetic", origin=COM, warehouse=None, note=None):
+        argv = ["set-target", name, "--org", org, "--base-url", origin]
+        if warehouse:
+            argv += ["--warehouse", warehouse]
+        if note:
+            argv += ["--note", note]
+        return self.invoke(argv)
+
+    def test_set_and_list_targets_without_secrets(self):
+        self.save()
+        code, out, _ = self.set_target(note="shared admin logs")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["org"], "org-synthetic")
+        code, out, _ = self.set_target("cn-prod", "org-cn", CN, "analytics")
+        self.assertEqual(code, 0)
+        code, out, _ = self.invoke(["list-targets"])
+        self.assertEqual(code, 0)
+        listed = json.loads(out)
+        self.assertEqual(sorted(listed["targets"]), ["avia", "cn-prod"])
+        self.assertEqual(listed["targets"]["cn-prod"], {"base_url": CN, "org": "org-cn", "warehouse": "analytics", "note": ""})
+        self.assertEqual(listed["targets"]["avia"]["note"], "shared admin logs")
+        raw = (self.directory / "targets.json").read_text()
+        self.assertNotIn(KEY, raw)
+        self.assertEqual(json.loads(raw)["schema"], 1)
+
+    def test_target_expands_to_origin_org_and_warehouse(self):
+        self.save(CN, "china-test-key")
+        self.set_target("cn-prod", "org-cn", CN, "analytics")
+        self.args.org, self.args.target = None, "cn-prod"
+        selected = self.resolve()
+        self.assertEqual((selected["base_url"], selected["org"], selected["warehouse"], selected["target"]),
+                         (CN, "org-cn", "analytics", "cn-prod"))
+        self.assertEqual(selected["api_key"], "china-test-key")
+        self.args.warehouse = "override"
+        self.assertEqual(self.resolve()["warehouse"], "override")
+
+    def test_target_conflicts_with_explicit_org_or_origin(self):
+        self.save()
+        self.set_target()
+        self.args.target = "avia"
+        self.args.org = "other-org"
+        with self.assertRaisesRegex(config.ConfigError, "conflicts with target"):
+            self.resolve()
+        self.args.org, self.args.base_url = "org-synthetic", CN
+        with self.assertRaisesRegex(config.ConfigError, "conflicts with target"):
+            self.resolve()
+        self.args.base_url = COM
+        self.assertEqual(self.resolve()["org"], "org-synthetic")
+
+    def test_unknown_target_and_missing_org_list_saved_targets(self):
+        self.save()
+        self.set_target()
+        self.args.target = "missing"
+        with self.assertRaisesRegex(config.ConfigError, "Unknown target 'missing'.*avia"):
+            self.resolve()
+        self.args.target, self.args.org = None, None
+        with self.assertRaisesRegex(config.ConfigError, "Saved targets.*avia"):
+            self.resolve()
+        self.assertEqual(self.invoke(["remove-target", "avia"])[0], 0)
+        self.assertEqual(self.invoke(["remove-target", "avia"])[0], 2)
+        with self.assertRaisesRegex(config.ConfigError, "No saved targets"):
+            self.resolve()
+
+    def test_target_registry_rejects_bad_schema_and_entries(self):
+        self.save()
+        path = self.directory / "targets.json"
+        for payload in ("not-json", json.dumps({"schema": 2, "targets": {}}), json.dumps({"targets": []}),
+                        json.dumps({"targets": {"x": {"org": "acme"}}}), json.dumps({"targets": {"bad name": {"org": "a", "base_url": COM}}})):
+            path.write_text(payload)
+            self.args.target = "x"
+            with self.assertRaises(config.ConfigError):
+                self.resolve()
+        path.write_text(json.dumps({"targets": {"legacy": {"org": "acme", "base_url": COM}}}))
+        self.args.target = "legacy"
+        self.assertEqual(self.resolve()["warehouse"], "default")
+
+    def test_set_target_requires_credentials_only_at_query_time(self):
+        self.assertEqual(self.set_target()[0], 0)
+        self.args.org, self.args.target = None, "avia"
+        with self.assertRaisesRegex(config.ConfigError, "set-key"):
+            self.resolve()
 
     @unittest.skipUnless(os.name == "posix", "POSIX permissions")
     def test_private_file_and_directory_permissions(self):

@@ -9,6 +9,7 @@ import unittest
 import urllib.error
 from unittest import mock
 
+import cloud_config
 import query
 
 CREDS = {"org": "acme", "api_key": "synthetic-test-key", "base_url": "https://api.databend.com", "warehouse": "default"}
@@ -351,12 +352,25 @@ class MainTest(unittest.TestCase):
         self.assertIn("--org", err)
         runner.assert_not_called()
 
-    def test_obsolete_target_option_is_rejected(self):
-        code, _, err, runner = self.invoke(["--org", "test-org", "--target", "test-alias", "SELECT 1"], {
-            "BENDCLOUD_DSN_TEST_ORG": "bendcloud://test-org:synthetic-unused-key@api.example.invalid/default"})
+    def test_target_is_not_read_from_host_dsn_variables(self):
+        code, _, err, runner = self.invoke(["--target", "test-alias", "SELECT 1"], {
+            "BENDCLOUD_DSN_TEST_ALIAS": "bendcloud://test-org:synthetic-unused-key@api.example.invalid/default"})
         self.assertEqual(code, 2)
-        self.assertIn("unrecognized arguments", err)
+        self.assertIn("Unknown target", err)
+        self.assertNotIn("synthetic-unused-key", err)
         runner.assert_not_called()
+
+    def test_saved_target_supplies_org_origin_and_warehouse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = {"XDG_CONFIG_HOME": directory, "DATABEND_CLOUD_API_KEY": CREDS["api_key"]}
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(cloud_config.main(["set-target", "logs", "--org", "org-synthetic",
+                                                    "--base-url", "https://api.databend.com", "--warehouse", "analytics"]), 0)
+            code, _, err, runner = self.invoke(["--target", "logs", "SELECT 1"], env)
+            self.assertEqual(code, 0)
+            selected = runner.call_args.args[1]
+            self.assertEqual((selected["org"], selected["warehouse"], selected["target"]), ("org-synthetic", "analytics", "logs"))
+            self.assertIn("target=logs org=org-synthetic", err)
 
     def test_api_key_model_ignores_unrelated_host_dsn(self):
         code, _, err, runner = self.invoke(["--org", "acme", "SELECT 1"], {

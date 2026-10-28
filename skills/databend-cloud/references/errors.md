@@ -7,7 +7,9 @@ Never let a failure implicitly change the account, organization, warehouse, or A
 | Missing key or file | Guide private `cloud_config.py set-key`, an explicit credential file, or host-managed environment injection. Do not request the key in chat. |
 | File mode, owner, or symlink rejected | Ask the user to fix it privately. On Unix, the credential must be a regular file owned by the user with mode `600`. Do not weaken this check. |
 | Invalid JSON | Ask the user to inspect or recreate the file privately; do not read its contents into model context. |
-| Missing or incorrect org | Confirm the actual Organization ID and pass `--org <Organization-ID>` with the selected API origin. Do not infer it from a display name, alias, or another tool's settings. |
+| Missing or incorrect org | Check `cloud_config.py list-targets` for a matching saved target; otherwise confirm the actual Organization ID and pass `--org <Organization-ID>` with the selected API origin. Do not infer it from a display name or another tool's settings. |
+| Unknown target or target conflict | The error lists saved target names. Use one of them, save a new one with `set-target`, or drop the conflicting `--org`/`--base-url`. Never guess which saved target the user meant. |
+| Target registry invalid | `targets.json` is plain JSON without secrets; show the error path and let the user fix or re-run `set-target`. Do not fall back to another org. |
 | Credential origin mismatch | Confirm the intended API deployment. Configure that origin's separate key. Do not copy or retarget a token, overwrite another site's file, or change a global setting. |
 | HTTP 401/403 or auth error | Check token status and the account's active membership/role in the exact organization. Do not try other organizations. |
 | Warehouse error | Confirm the warehouse exists in the selected organization and the account can use it. Do not automatically resume, resize, or create it. |

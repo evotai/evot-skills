@@ -2,6 +2,12 @@
 
 Versions here identify the skill, not a Databend Cloud server release. Dates are UTC.
 
+## 1.1.0 — 2026-10-28
+
+- Add a local named-target registry (`cloud_config.py set-target / list-targets / remove-target`, `~/.config/databend-cloud/targets.json`). A target stores origin, Organization ID, warehouse, and a routing note; it never stores a key.
+- `query.py`, `query_api.py`, and `cloud_config.py show` accept `--target <name>` as an alternative to `--org/--base-url`. Explicit flags that disagree with the target are errors; `--warehouse` may override per call.
+- Agents must run `list-targets` and match the subject before asking for an Organization ID, and should offer `set-target` after a user supplies one. There is still no default or active target; a missing `--org/--target` error lists saved names.
+
 ## 1.0.1 — 2026-10-23
 
 - Update token creation guidance to the standalone **Account API Tokens** sidebar entry.

@@ -4,7 +4,7 @@
 
 Manual personal-token entry is the supported method. Do not invent CLI login, browser authorization, or device codes. Use the endpoint the user supplied or pasted from documentation; ask which site only when unknown. Never retarget existing credentials because the user speaks another language.
 
-Give the matching console token-creation path and one copyable `set-key --base-url <origin>` command with the actual installed script path. The user creates and privately enters the token. The agent asks only for a missing Organization ID, passes it as `--org`, confirms the endpoint/org/warehouse, and verifies access. Warehouse defaults to `default`; no alias or additional org setup is needed.
+Give the matching console token-creation path and one copyable `set-key --base-url <origin>` command with the actual installed script path. The user creates and privately enters the token. The agent checks `list-targets`, asks only for a missing Organization ID, passes it as `--org` (or saves a target and passes `--target`), confirms the endpoint/org/warehouse, and verifies access. Warehouse defaults to `default`.
 
 ## Credential and origin
 
@@ -39,7 +39,7 @@ Each private file contains a required origin and a single account key:
 }
 ```
 
-Org and warehouse are request arguments, not entries in another configuration file. `XDG_CONFIG_HOME` changes the credential root. `--credentials-file <path>` supports a private location or another account on the same origin. Ports are encoded in default filenames to prevent collisions.
+Org and warehouse are request arguments, supplied directly or expanded from a saved target in `targets.json` (see [Organization and target selection](organizations.md)); the target file never holds a key. `XDG_CONFIG_HOME` changes the credential root. `--credentials-file <path>` supports a private location or another account on the same origin. Ports are encoded in default filenames to prevent collisions.
 
 Give only the selected site's command:
 
@@ -71,7 +71,7 @@ Do not invent the user's secret-manager command. Without `--stdin`, a noninterac
 | `DATABEND_CLOUD_BASE_URL` | Origin bound to the environment key; set explicitly for China. Low-level fallback is international. |
 | `DATABEND_CLOUD_CREDENTIALS_FILE` | Explicit private account-file default. |
 
-`--org` is required on every query/API call. `--warehouse` defaults to `default`. Org/warehouse aliases and implicit environment org selection are not implemented.
+`--org` or `--target` is required on every query/API call. `--warehouse` defaults to `default` or the target's warehouse. Implicit environment org selection (`DATABEND_CLOUD_ORG` or similar) is not implemented; a remote agent can ship its own `targets.json`.
 
 ## Credential resolution
 
