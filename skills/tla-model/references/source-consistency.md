@@ -1,8 +1,20 @@
-# Pre-run source consistency
+# Source versions: replay by default, synchronize explicitly
 
-Required before every run intended to assess current code. TLC checks the supplied model, not its correspondence with the implementation. The runner does not enforce this review.
+Every code model directory must record its source repository and full commit in README. A branch name or PR number alone is not a stable binding. Design-only models record a versioned document instead. Keep this binding separate from the model's own revision/hashes and from the latest TLC result.
 
-## Identify the target
+## Default: replay the bound model
+
+Requests such as “run TLA”, “rerun this model” or “run smoke” execute the saved model/configuration for its recorded baseline. Do not scan the current branch or working-tree diff, automatically repair the model, update the binding to HEAD, check out another revision, or add tests. Differences from current code are reference information, not permission to synchronize. If the binding is missing or ambiguous, ask instead of inventing one from HEAD.
+
+Report the bound source commit, actual model/configuration hashes, checks and artifact path. Leave repository files unchanged. A failed replay remains a failure; diagnose against the bound source version and ask before fixing the model. Source can be read at that revision without switching the user's working tree. If unavailable, report that trace-to-code correspondence cannot be confirmed; TLC may still replay the saved model.
+
+## Explicit sync: validate a requested source target
+
+Only requests such as “validate the current branch/PR/latest code” or “check consistency with current code” authorize synchronization to that target. A generic model-edit request stays on the existing bound commit unless the user also requests a new source target; new models bind to the agreed source revision. For a PR, establish whether the target is its head or merge result, then record the resolved full commit. For a dirty tree, record the base commit plus the reviewed patch identity. Never silently rewrite the baseline or transfer old results to the new target.
+
+TLC checks the supplied model, not its correspondence with implementation. The following review applies to **sync mode only** and is not automatically enforced by the runner.
+
+### Identify the target
 
 Read the model README's source baseline, `model.json.source_map`, `scope`, and `audit`. Decide whether the target is a clean commit, a PR revision, or the working tree. Do not silently substitute HEAD for a dirty working tree.
 
@@ -28,7 +40,7 @@ git diff --cached -- <affected-paths>
 
 The working-tree diff against HEAD includes the net staged and unstaged changes; inspect the index separately if that is the target. Read relevant untracked source files explicitly: git diff omits them. If the baseline is absent, history unavailable, or source mapping missing, re-establish correspondence from current code before claiming current-code coverage.
 
-## Review semantics, not only mapped files
+### Review semantics, not only mapped files
 
 Start with the repository-wide changed-file list. Follow affected callers, helpers, metadata types, serializers, feature flags, defaults, dependency changes and tests into `source_map`. A diff outside the mapped filenames can still alter the protocol.
 
@@ -42,7 +54,7 @@ For affected actions, check ordering and atomicity, lock/await boundaries, CAS c
 | Change depends on an omitted actor or behavior | Refine the same model within agreed scope, or report the gap; do not silently exclude the changed behavior. |
 | Correspondence cannot be established | Mark it unverified. Historical-model runs may be diagnostic, but are not validation of current code. |
 
-## Run and record
+### Run and record
 
 - After model/configuration changes, rerun all normal cases, mutation controls and witnesses. Never carry forward old PASS counts as new results.
 - Keep source-review status separate from TLC status. Review can succeed while TLC fails; TLC can pass while source correspondence is unverified.

@@ -15,17 +15,19 @@ Find implementation or design bugs, not a green TLC run. A bounded pass is not a
 
 ## Scope
 
-Agree on the protocol, source commit/working tree or design revision, safety property, and file location. Default: no commits, CI integration or production-code changes. Keep one model per protocol; do not expand other models unasked.
+Agree on the protocol, safety property, and file location. Bind every code model to a full source commit in its README; bind design models to an explicit design revision. Default: no commits, CI integration or production-code changes. Keep one model per protocol; do not expand other models unasked.
+
+**Default is replay, not synchronization.** “Run this model” means run its saved TLA/configuration against its recorded source baseline. Do not scan current code changes, edit the model, switch branches or relabel results as current-HEAD validation. Only an explicit request to validate the current branch, PR, latest code or source correspondence enters sync mode. See [source versions and modes](references/source-consistency.md).
 
 ## Workflow
 
-1. **Check source consistency before running an existing model.** Follow [source consistency](references/source-consistency.md): compare the recorded baseline with the target revision and working-tree changes, including staged, unstaged and relevant untracked files. Review affected callers/helpers, not just mapped filenames. Unchanged semantics permits reuse; semantic changes require updating the model, mapping and controls. Regenerate only if the structure no longer fits. Unknown correspondence means unverified, not a current-code PASS. This is an agent review gate, not enforced by the runner.
+1. **Select replay or explicit sync.** In replay mode, read the recorded source baseline and run the saved model without a source diff scan or automatic correction; ask if the binding is missing. In sync mode, follow [source consistency](references/source-consistency.md): compare baseline and requested target, review affected callers/helpers and dirty files, then update the model only for semantic changes. Change the binding only after review. The runner does not verify correspondence. For replay, skip modeling/controls changes and go directly to Run.
 2. **Read and model the actual protocol.** Follow [modeling](references/modeling.md). Trace reads, writes, CAS, caches, listings, retries, clocks and failures end to end. Split actions where another actor can interleave; model only checks the code actually performs. Record each action as `file::function` in `source_map`, bounds/abstractions in `scope`, and resolved model errors in `audit`.
 3. **Add controls.** Keep user-visible safety properties distinct from type/structural facts. Use a mutation disabling one actual protection and expecting one exact violation; use witnesses for important interleavings. Never weaken safety, invent guards, or prune bad states to obtain a pass.
 4. **Run small, then complete.** Use the commands below. After model/configuration changes, run all normal cases, mutations and witnesses. Timeouts, OOMs, parse errors and incomplete normal searches are not passes. Sampling is not exhaustive checking.
-5. **Triage failures against code.** Follow [counterexample triage](references/counterexample-triage.md). Map the trace to implementation steps; classify model error, abstraction outside scope, or candidate bug. Correct model errors without weakening invariants, then rerun everything. If diagnosing a candidate *inductive* invariant, read [induction diagnostics](references/induction.md); a non-inductive candidate is not itself an implementation bug.
-6. **Audit even after a pass.** Recheck the interleaving checklist against current code. Confirm candidate bugs with same-version native tests where feasible, using isolated resources. Ask before using shared machines/services, licenses or credentials.
-7. **Record evidence.** Follow [repository and report conventions](references/repository-and-report.md): models-root `AGENTS.md`, per-model README, source review separate from TLC results, verdict first in the user's language. Recheck source/model changes during the run; never attribute old results to a newer snapshot.
+5. **Triage against the bound source revision, not incidental HEAD.** Follow [counterexample triage](references/counterexample-triage.md). Classify model error, abstraction outside scope, or candidate bug. A replay request does not authorize model repair: report the mismatch and ask before changes. When repair is authorized, preserve invariants and rerun everything. For a candidate *inductive* invariant, read [induction diagnostics](references/induction.md); non-inductiveness alone is not an implementation bug.
+6. **For modeling/audit requests, review even after a pass.** Check interleavings against the bound source (or explicitly requested sync target). Confirm candidate bugs with same-version native tests where feasible, using isolated resources. Ask before using shared machines/services, licenses or credentials.
+7. **Record evidence.** Follow [repository and report conventions](references/repository-and-report.md), verdict first in the user's language. Replay leaves model files and binding unchanged; report its baseline, model hashes and external artifacts. For authorized modeling/sync, update README and check for source/model changes during the run. Never attribute old results to a newer snapshot.
 
 ## Run
 
@@ -43,7 +45,7 @@ If the pinned jar is missing, ask once before `--download`. Java comes from `--j
 
 | Task | Read |
 |---|---|
-| Reuse a model against current code | [Source consistency](references/source-consistency.md) |
+| Choose replay vs explicit source synchronization | [Source versions and consistency](references/source-consistency.md) |
 | Create/change a model or audit interleavings | [Modeling and manifest](references/modeling.md) |
 | Explain a normal-case failure | [Counterexample triage](references/counterexample-triage.md) |
 | Diagnose induction or prepare a proof | [Induction diagnostics and upstream sources](references/induction.md) |

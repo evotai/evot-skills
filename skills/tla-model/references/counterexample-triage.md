@@ -1,5 +1,7 @@
 # Counterexample triage
 
+Use the model's bound source revision, not incidental working-tree HEAD. In replay mode, preserve the failing model and report findings; ask before repairs or source synchronization. The repair steps below require an authorized modeling/audit/repair task.
+
 1. **Keep the artifacts.** Rerun into a new `--output` directory, never over an old one.
 2. **Summarize the trace.**
 
