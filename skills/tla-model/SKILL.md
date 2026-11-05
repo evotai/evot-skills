@@ -17,7 +17,7 @@ The goal is to find real bugs in the implementation or design. A green TLC run i
 
 - The logic to model and its source of truth: code at a commit, a PR, or a design doc.
 - The safety property in the user's terms, e.g. "a published table never references a deleted file".
-- Where files live. Follow the repository's existing layout; otherwise propose `tests/tla/<model_name>/`. One directory per protocol, containing `<Module>.tla` and `model.json`. No generated `.cfg`, traces, jars or long READMEs in the repository.
+- Where files live. Follow the repository's existing layout; otherwise propose `tests/tla/<model_name>/`. See [Repository files](#repository-files). No generated `.cfg`, traces, jars or logs in the repository.
 - Default: no commits, no CI integration, no production-code changes unless asked.
 
 ## Workflow
@@ -42,6 +42,58 @@ The goal is to find real bugs in the implementation or design. A green TLC run i
    Map each step to code and classify the failure as a model error, an abstraction outside scope, or a candidate bug. Never weaken an invariant, add a guard the code lacks, prune bad states, or relabel the failure as expected to make it pass.
 6. **Audit after it passes.** Walk the interleaving checklist in [modeling](references/modeling.md) against the code. Missed interleavings are the most common reason a model passes while the code is wrong.
 7. **Confirm candidates natively** when feasible: same-commit binary or tests, isolated storage, metadata and ports, replaying the trace order. Ask before using shared machines, services, licenses or credentials.
+8. **Update the model README** after every verified change: source commit, skill commit and last results.
+
+## Repository files
+
+```text
+<models-root>/
+├── AGENTS.md            # points agents to this skill
+└── <model_name>/
+    ├── <Module>.tla
+    ├── model.json       # cases, scope, source_map, audit
+    └── README.md        # modeled logic and version
+```
+
+`<models-root>/AGENTS.md`, created once and kept this short:
+
+```markdown
+# TLA+ models
+
+Use the evot `tla-model` skill to create, change, run and triage these models; read its SKILL.md first.
+
+- One directory per protocol: `<Module>.tla`, `model.json`, and `README.md` with the modeled logic and version.
+- Run: `python3 <tla-model skill>/scripts/tlc_run.py <models-root>/<model>`. The installed skill is at `~/.evotai/skills/tla-model/`.
+- When mapped code changes, recheck the model against it, rerun every case, and update the README version and results.
+- Never commit generated `.cfg` files, traces, jars or logs. These checks are not part of CI.
+```
+
+`<model_name>/README.md`, at most about 40 lines. Do not copy `scope` or `source_map` from `model.json`:
+
+````markdown
+# <Module>
+
+<One paragraph: the logic modeled and the safety question, in plain terms.>
+
+| | |
+|---|---|
+| Source | <repository> `<full commit>` (<date>) |
+| Generated with | evot `tla-model` skill `<evot-skills commit>`, TLC 1.8.0 |
+| Last verified | <date>: <passed>/<total> checks; normal cases <distinct states> distinct states |
+
+## Modeled logic
+- <step group>: `<path>::<function>`
+
+## Safety properties
+- `<Invariant>`: <meaning>
+
+Bounds and abstractions are in `model.json` `scope`, the action-to-code map in `source_map`, and resolved model errors in `audit`.
+
+## Run
+```bash
+python3 <tla-model skill>/scripts/tlc_run.py <models-root>/<model_name>
+```
+````
 
 ## Report
 
