@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Model protocols in TLA+, check with TLC, map to code",
+  "example": "tla-model: Check our commit/GC protocol for a race that loses data"
+}

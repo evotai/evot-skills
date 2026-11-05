@@ -22,6 +22,7 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Browse, research, and automate the web | `opencli` |
 | `rea` | Reverse engineer binaries, containers, and packaged applications through REA CLI with reproducible evidence and reconstructed source | Compatible Node.js and working REA CLI; task-specific REA backends, Docker for container tasks |
+| `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; pinned TLC jar downloaded on request |
 
 ### REA in evot
 
