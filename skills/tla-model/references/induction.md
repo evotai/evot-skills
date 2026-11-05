@@ -1,6 +1,26 @@
-# Optional induction diagnostics
+# Optional proof reuse and induction diagnostics
 
-Read only when a candidate inductive invariant fails or the user requests proof preparation. Ordinary code audits stay on the TLC reachability workflow; do not install Apalache/TLAPS or start a benchmark as a side effect.
+Read when reusing a proof, diagnosing an inductive invariant, or preparing a requested proof. Ordinary runs stay on the bound-model replay workflow; do not install Apalache/TLAPS or start a benchmark as a side effect.
+
+## Reuse a proof only after checking its premises
+
+A theorem over valid histories does not establish that concurrent implementation steps produce those histories. Record the proof's source, revision/hash, assumptions and checked status; proof text or a screenshot is not a reproduced proof-checker result. Keep project-specific/private proof artifacts outside the public skill unless publication is authorized.
+
+For an authorized modeling/audit task, build a small correspondence table in the model's `audit` notes or external report:
+
+| Proof premise | Bound code `file::function` | Model property/control | Status or gap |
+|---|---|---|---|
+| <exact assumption and domain> | <mechanism maintaining it> | <invariant, mutation or witness> | <supported within bounds / unverified / inapplicable> |
+
+Check the interpretation before accepting a premise:
+
+- **History and ordering:** committed vs buffered snapshots, linear chain vs branches, equal timestamps, and transaction history collapse. Do not identify similarly named clocks/fences without checking their semantics.
+- **Object provenance and non-resurrection:** show where old objects enter a history and why removed references cannot reappear. Shared objects, clones and restore paths can invalidate a single-chain assumption.
+- **Deletion root and future publication:** establish why the selected root is eligible, including when a directory candidate is uncommitted. Calling an object “uncommitted” does not make deletion safe: what prevents its later publication after deletion?
+
+Keep premises as obligations to check, not extra `Init`/`Next` guards or state constraints that exclude failing executions. A premise mismatch means the theorem is inapplicable or its scope needs refinement, not automatically an implementation bug. Distinguish that from an inaccurate model and from a code-reachable safety violation.
+
+Report theorem checking, bounded TLC results and source correspondence separately. Only an explicit formal-proof request starts TLAPS work. None of this authorizes synchronizing a replay to current HEAD or silently repairing its model.
 
 ## Separate safety from induction
 
