@@ -19,4 +19,4 @@
    - Replay the trace order with separate sessions or nodes.
    - Assert the data outcome, and also which check fired (error code and message). A failure caused by an unrelated error, such as a missing file, does not exercise the defense being tested.
    - Stop only the processes you started. Keep the scripts and evidence.
-6. **Report** using the template in [SKILL.md](../SKILL.md#report).
+6. **Report** using the template in [repository and report conventions](repository-and-report.md#report).

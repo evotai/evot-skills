@@ -11,129 +11,40 @@ metadata:
 
 # TLA+ model checking
 
-The goal is to find real bugs in the implementation or design. A green TLC run is not the goal, and a bounded pass is not a proof.
+Find implementation or design bugs, not a green TLC run. A bounded pass is not a proof, and TLC does not check correspondence with source code.
 
-## Agree on scope first
+## Scope
 
-- The logic to model and its source of truth: code at a commit, a PR, or a design doc.
-- The safety property in the user's terms, e.g. "a published table never references a deleted file".
-- Where files live. Follow the repository's existing layout; otherwise propose `tests/tla/<model_name>/`. See [Repository files](#repository-files). No generated `.cfg`, traces, jars or logs in the repository.
-- Default: no commits, no CI integration, no production-code changes unless asked.
+Agree on the protocol, source commit/working tree or design revision, safety property, and file location. Default: no commits, CI integration or production-code changes. Keep one model per protocol; do not expand other models unasked.
 
 ## Workflow
 
-1. **Read before modeling.** Follow the code path end to end: reads, writes, CAS/transactions, caches, listings, retries, timestamps, abort and failure paths, and existing regression tests. Note `file::function` for each step as you go.
-2. **Write the model.** Follow [modeling](references/modeling.md): one action per externally observable step, split wherever another actor can interleave, only the checks the code really has, distinct clocks and views, and physical existence kept separate from cached contents and published references. Record bounds and abstractions in `model.json.scope` and every action in `source_map`.
-3. **Add controls before trusting a pass.** For each key protection add one mutation case (a constant that disables exactly that code check, expecting one exact invariant violation) and witnesses for the important interleavings. A pass without controls tells you nothing.
-4. **Run**, starting with the smallest configuration:
-
-   ```bash
-   python3 scripts/tlc_run.py <model-dir> --list
-   python3 scripts/tlc_run.py <model-dir> [--case NAME ...] [--output NEW_DIR]
-   ```
-
-   If the jar is missing, ask once, then add `--download`. Java comes from `--java`, `JAVA_HOME`, or `PATH`. `PASS` on a mutation or witness means the expected counterexample was found. Timeouts, OOMs, parse errors and `states left on queue` in a normal case are failures, not passes.
-5. **Triage every normal-case failure** with [counterexample triage](references/counterexample-triage.md):
-
-   ```bash
-   python3 scripts/tlc_trace.py <artifacts>/<case>/tlc.log [--vars a,b] [--final]
-   ```
-
-   Map each step to code and classify the failure as a model error, an abstraction outside scope, or a candidate bug. Never weaken an invariant, add a guard the code lacks, prune bad states, or relabel the failure as expected to make it pass.
-6. **Audit after it passes.** Walk the interleaving checklist in [modeling](references/modeling.md) against the code. Missed interleavings are the most common reason a model passes while the code is wrong.
-7. **Confirm candidates natively** when feasible: same-commit binary or tests, isolated storage, metadata and ports, replaying the trace order. Ask before using shared machines, services, licenses or credentials.
-8. **Update the model README** after every verified change: source commit, skill commit and last results.
-
-## Repository files
-
-```text
-<models-root>/
-├── AGENTS.md            # points agents to this skill
-└── <model_name>/
-    ├── <Module>.tla
-    ├── model.json       # cases, scope, source_map, audit
-    └── README.md        # modeled logic and version
-```
-
-`<models-root>/AGENTS.md`, created once and kept this short:
-
-```markdown
-# TLA+ models
-
-Use the evot `tla-model` skill to create, change, run and triage these models; read its SKILL.md first.
-
-- One directory per protocol: `<Module>.tla`, `model.json`, and `README.md` with the modeled logic and version.
-- Run: `python3 <tla-model skill>/scripts/tlc_run.py <models-root>/<model>`. The installed skill is at `~/.evotai/skills/tla-model/`.
-- When mapped code changes, recheck the model against it, rerun every case, and update the README version and results.
-- Never commit generated `.cfg` files, traces, jars or logs. These checks are not part of CI.
-```
-
-`<model_name>/README.md`, at most about 40 lines. Do not copy `scope` or `source_map` from `model.json`:
-
-````markdown
-# <Module>
-
-<One paragraph: the logic modeled and the safety question, in plain terms.>
-
-| | |
-|---|---|
-| Source | <repository> `<full commit>` (<date>) |
-| Generated with | evot `tla-model` skill `<evot-skills commit>`, TLC 1.8.0 |
-| Last verified | <date>: <passed>/<total> checks; normal cases <distinct states> distinct states |
-
-## Modeled logic
-- <step group>: `<path>::<function>`
-
-## Safety properties
-- `<Invariant>`: <meaning>
-
-Bounds and abstractions are in `model.json` `scope`, the action-to-code map in `source_map`, and resolved model errors in `audit`.
+1. **Check source consistency before running an existing model.** Follow [source consistency](references/source-consistency.md): compare the recorded baseline with the target revision and working-tree changes, including staged, unstaged and relevant untracked files. Review affected callers/helpers, not just mapped filenames. Unchanged semantics permits reuse; semantic changes require updating the model, mapping and controls. Regenerate only if the structure no longer fits. Unknown correspondence means unverified, not a current-code PASS. This is an agent review gate, not enforced by the runner.
+2. **Read and model the actual protocol.** Follow [modeling](references/modeling.md). Trace reads, writes, CAS, caches, listings, retries, clocks and failures end to end. Split actions where another actor can interleave; model only checks the code actually performs. Record each action as `file::function` in `source_map`, bounds/abstractions in `scope`, and resolved model errors in `audit`.
+3. **Add controls.** Keep user-visible safety properties distinct from type/structural facts. Use a mutation disabling one actual protection and expecting one exact violation; use witnesses for important interleavings. Never weaken safety, invent guards, or prune bad states to obtain a pass.
+4. **Run small, then complete.** Use the commands below. After model/configuration changes, run all normal cases, mutations and witnesses. Timeouts, OOMs, parse errors and incomplete normal searches are not passes. Sampling is not exhaustive checking.
+5. **Triage failures against code.** Follow [counterexample triage](references/counterexample-triage.md). Map the trace to implementation steps; classify model error, abstraction outside scope, or candidate bug. Correct model errors without weakening invariants, then rerun everything. If diagnosing a candidate *inductive* invariant, read [induction diagnostics](references/induction.md); a non-inductive candidate is not itself an implementation bug.
+6. **Audit even after a pass.** Recheck the interleaving checklist against current code. Confirm candidate bugs with same-version native tests where feasible, using isolated resources. Ask before using shared machines/services, licenses or credentials.
+7. **Record evidence.** Follow [repository and report conventions](references/repository-and-report.md): models-root `AGENTS.md`, per-model README, source review separate from TLC results, verdict first in the user's language. Recheck source/model changes during the run; never attribute old results to a newer snapshot.
 
 ## Run
+
+Resolve script paths against this skill directory, not the project. Use external artifact directories; never commit generated configs, jars, logs or traces.
+
 ```bash
-python3 <tla-model skill>/scripts/tlc_run.py <models-root>/<model_name>
+python3 scripts/tlc_run.py <model-dir> --list
+python3 scripts/tlc_run.py <model-dir> [--case NAME ...] [--output NEW_DIR]
+python3 scripts/tlc_trace.py <artifacts>/<case>/tlc.log [--vars a,b] [--final]
 ```
-````
 
-## Report
+If the pinned jar is missing, ask once before `--download`. Java comes from `--java`, `JAVA_HOME`, or `PATH`. A mutation/witness `PASS` means its expected counterexample was found, not that the mutated implementation is safe. Default runs check safety, not liveness.
 
-Use this template for every final report. Write it in the user's language, keep the section order, and omit any section that has no content. Put the verdict first. No preamble, no recap at the end.
+## References — load when needed
 
-````markdown
-**Verdict:** <one sentence: confirmed bug | model error, fixed | not reproduced | passes within bounds>, <the key reason>.
-
-## Scope
-- Logic: <code at commit or design>, <main files::functions>
-- Property: <safety property in user terms>
-- Bounds: <actors, operations, retries, time samples>; abstractions: <the ones that matter>
-
-## Results
-| Check | Result | Distinct states |
-|---|---|---|
-| Normal configurations (N) | all exhaustive / K failed | <total> |
-| Mutation controls (M) | each found its expected violation | |
-| Witnesses (W) | all reachable | |
-
-## Counterexample
-<case name>: <invariant>, <classification>.
-
-| Step | Action | Code | Effect |
-|---|---|---|---|
-
-- Protection lost at step <n>: <what was not recorded or checked>
-- Final state: <what exists> vs <what is still referenced>
-- Evidence: <code line, real artifact, or native run result and which check fired>
-
-## Not covered
-- <behavior outside the bounds or model>
-
-## Rerun
-```bash
-<command>
-```
-Artifacts: <path>
-````
-
-- The counterexample section is for normal-case failures, or a trace the user asked about. For a deliberate mutation, name the code line the mutation removes and say it is not a bug.
-- List step rows for the relevant actions only. Merge consecutive steps that change nothing relevant into one row, e.g. "14-17".
-- A bounded pass is never called a proof, and a model error is never reported as a bug.
+| Task | Read |
+|---|---|
+| Reuse a model against current code | [Source consistency](references/source-consistency.md) |
+| Create/change a model or audit interleavings | [Modeling and manifest](references/modeling.md) |
+| Explain a normal-case failure | [Counterexample triage](references/counterexample-triage.md) |
+| Diagnose induction or prepare a proof | [Induction diagnostics and upstream sources](references/induction.md) |
+| Create repository files or deliver results | [Repository and report conventions](references/repository-and-report.md) |
