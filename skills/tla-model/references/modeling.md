@@ -1,5 +1,13 @@
 # Modeling guide
 
+## Start from the bad outcome
+
+Build a property-directed model, not a line-by-line translation of the whole subsystem. Work backward from the agreed user-visible safety goal: what bad outcome is forbidden, which action could first cause it, what information or checks that action relies on, and which concurrent actions could invalidate them? Trace those dependencies against the bound source, retain the state and transitions that affect them, and test the smallest relevant interleaving first.
+
+For example, a published reference could point to a deleted object if GC decides from an old view that the object is unused while a writer later publishes it. Inspect the read, deletion and publication steps and any actual version/fence checks between them. Use a witness to check that the suspected schedule is reachable.
+
+This selects an investigation focus, not permission to omit relevant actions, protections, in-flight operations or failure paths. Record abstractions in `scope` and why omitted details do not affect this property; if that cannot be justified, include them or report the gap. Extend the dependency review as needed; a pass or an unreachable witness does not establish general safety. Do not require an inductive invariant or a TLAPS proof just to search for reachable bugs.
+
 ## Map code to actions
 
 - Make one action per externally observable step: each metadata read, object read, write or delete, CAS or transaction, cache fill or hit, and directory listing.
@@ -31,6 +39,17 @@
 - **Mutation**: a boolean constant that disables one real protection, with a case `"violation": "Invariant"`. If no counterexample appears, either the protection is redundant within the bounds or the model cannot reach the danger. Investigate before trusting the normal pass.
 - **Witness**: a `NeverX` probe for an important interleaving, such as a cache hit after delete, a retry after conflict, or GC observing an intermediate state. A witness case keeps every default safety invariant.
 - Keep the set small. Each control should support a claim in the report.
+
+## Iterate with a question
+
+Before an exploratory rerun, state briefly in the existing work notes or report: the unresolved hypothesis, what changed in the model/configuration or diagnostic method, and the new evidence expected. Use the resulting trace or witness outcome to choose the next step; no separate ledger or schema is needed.
+
+- Resolve source/model mismatches before expanding the search. For induction failures, check reachability and missing structural facts before reporting a bug.
+- For state explosion, review abstractions and state representation; justify any larger bounds or resource budget. Never remove relevant behavior merely to finish.
+- If formal proof was explicitly requested, split a stalled obligation or revise its abstraction rather than repeatedly submitting it unchanged.
+- Unchanged reruns are appropriate for required regressions, reproducibility, or a justified transient-failure retry. Otherwise, if no new evidence or concrete next experiment is available, stop and report the unresolved question; ask before work beyond the agreed scope or budget. Resource exhaustion is not a pass or evidence that the property is false.
+
+After authorized model/configuration changes, still run all normal cases, mutations and witnesses. This exploratory loop does not alter saved models in replay mode.
 
 ## Interleaving audit checklist
 

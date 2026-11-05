@@ -60,7 +60,7 @@ Replay writes results to external artifacts, not the model README. Create/update
 Write in the user's language. Keep this order, omit empty sections, and put the verdict first without a preamble or closing recap:
 
 ````markdown
-**Verdict:** <confirmed bug | model error, fixed | not reproduced | passes within bounds | source correspondence unverified>, <key reason>.
+**Verdict:** <confirmed bug | model error | property/assumption error | not reproduced | passes within bounds | source correspondence unverified | unresolved>, <key reason and repair status, if any>.
 
 ## Scope
 - Logic: <source snapshot or design>, <main files::functions>
