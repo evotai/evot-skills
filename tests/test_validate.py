@@ -1,4 +1,5 @@
 """Fast catalog display validation tests; no network or skill prerequisites."""
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -60,6 +61,48 @@ class DisplayTests(unittest.TestCase):
                 errors = []
                 validate.check_display(str(Path(validate.SKILLS) / unit), errors)
                 self.assertEqual(errors, [])
+
+
+class ArchiveTests(unittest.TestCase):
+    def test_size_exception_requires_exact_content_addressed_tlc_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'artifact'
+            content = b'x' * (validate.MAX_BYTES + 1)
+            path.write_bytes(content)
+            digest = hashlib.sha256(content).hexdigest()
+            archive = f'skills/tla-model/assets/sha256/{digest}/tla2tools.jar'
+            errors = []
+            validate.check_file_size(path, archive, errors)
+            self.assertEqual(errors, [])
+            for rel in [
+                archive.replace(digest, 'not-a-sha256'),
+                archive.replace('tla-model', 'other-skill'),
+                archive.replace('tla2tools.jar', 'other.jar'),
+                'skills/tla-model/large.txt',
+            ]:
+                with self.subTest(rel=rel):
+                    errors = []
+                    validate.check_file_size(path, rel, errors)
+                    self.assertIn('exceeds', errors[0])
+
+    def test_archive_hash_checked_even_for_small_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'artifact'
+            path.write_bytes(b'wrong bytes')
+            rel = f'skills/tla-model/assets/sha256/{"0" * 64}/tla2tools.jar'
+            errors = []
+            validate.check_file_size(path, rel, errors)
+            self.assertIn('SHA-256', errors[0])
+
+    def test_archive_size_still_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'artifact'
+            with path.open('wb') as stream:
+                stream.truncate(validate.MAX_TLC_ARCHIVE_BYTES + 1)
+            rel = f'skills/tla-model/assets/sha256/{"0" * 64}/tla2tools.jar'
+            errors = []
+            validate.check_file_size(path, rel, errors)
+            self.assertIn(f'exceeds {validate.MAX_TLC_ARCHIVE_BYTES}', errors[0])
 
 
 if __name__ == '__main__':

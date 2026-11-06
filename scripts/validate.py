@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate the skill catalog layout, frontmatter, and internal references."""
+import hashlib
 import json
 import os
 import re
@@ -14,6 +15,12 @@ SCRIPT_RE = re.compile(
 )
 MAX_LINES = 500
 MAX_BYTES = 1_000_000
+# Only the offline TLC dependency may exceed the normal per-file limit.
+# Its full digest must agree with its content-addressed archive path.
+TLC_ARCHIVE_RE = re.compile(
+    r"skills/tla-model/assets/sha256/([0-9a-f]{64})/tla2tools\.jar"
+)
+MAX_TLC_ARCHIVE_BYTES = 8_000_000
 
 
 DISPLAY_FILE = '.display.json'
@@ -129,6 +136,20 @@ def check_skill(rel, errors, warnings):
             errors.append(f"{rel}/SKILL.md: reference '{target}' escapes unit '{unit}'")
 
 
+def check_file_size(path, rel, errors):
+    archive = TLC_ARCHIVE_RE.fullmatch(rel.replace(os.sep, "/"))
+    maximum = MAX_TLC_ARCHIVE_BYTES if archive else MAX_BYTES
+    if os.path.getsize(path) > maximum:
+        errors.append(f"{rel}: exceeds {maximum} bytes")
+    elif archive:
+        digest = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for chunk in iter(lambda: stream.read(64 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != archive[1]:
+            errors.append(f"{rel}: SHA-256 does not match archive path")
+
+
 def check_files(errors):
     for base, dirs, files in os.walk(SKILLS):
         dirs[:] = [name for name in dirs if not name.startswith(".")]
@@ -142,8 +163,7 @@ def check_files(errors):
                 errors.append(f'{rel}: display metadata belongs at the install unit root')
             if name.startswith(".env") or name == ".DS_Store":
                 errors.append(f"{rel}: must not be committed")
-            if os.path.getsize(path) > MAX_BYTES:
-                errors.append(f"{rel}: exceeds {MAX_BYTES} bytes")
+            check_file_size(path, rel, errors)
 
 
 def main():

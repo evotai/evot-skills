@@ -21,7 +21,7 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | `databend-cloud` | Connect, query, manage authorized resources, and investigate Databend Cloud incidents | `python3`, private API key file or environment key; optional `jq` for readable log exports |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Browse, research, and automate the web | `opencli` |
-| `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; pinned TLC jar downloaded on request |
+| `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; exact TLC jar archived with the skill and installed offline on request |
 
 ### Databend Cloud in any agent
 

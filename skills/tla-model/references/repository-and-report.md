@@ -36,7 +36,7 @@ Keep each model README about 40 lines or fewer; do not duplicate `scope` or `sou
 |---|---|
 | Bound source | <repository> `<full commit>`; clean/dirty, reviewed patch artifact if dirty |
 | Consistency review | <date>: unchanged semantics / model updated / unverified; brief reason |
-| Generated with | evot `tla-model` skill `<evot-skills commit>`, TLC 1.8.0 |
+| Generated with | evot `tla-model` skill `<evot-skills commit>`; TLC `<full SHA-256, source commit, build ID from toolchain.json>` |
 | Last TLC run | <date>, <model/config revision or hashes>: <passed>/<total> checks; normal cases <distinct states> distinct states |
 
 ## Modeled logic

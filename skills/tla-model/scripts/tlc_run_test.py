@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Offline tlc_run tests: no Java, network or real jar."""
+"""Offline tlc_run tests: archived jar identity and runner logic; no Java or network."""
 import contextlib
 import io
+import json
+import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -85,6 +88,117 @@ class CaseTests(unittest.TestCase):
                 tlc_run.literal(value)
 
 
+class JarTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.jar = self.root / "cache" / "tools.jar"
+        network = mock.patch("urllib.request.urlopen", side_effect=AssertionError("network used"))
+        self.urlopen = network.start()
+        self.addCleanup(network.stop)
+        output = contextlib.redirect_stdout(io.StringIO())
+        output.__enter__()
+        self.addCleanup(output.__exit__, None, None, None)
+
+    def test_archive_identity_matches_manifest(self):
+        tlc_run.verify_jar(tlc_run.ARCHIVED_JAR)
+        self.assertEqual(tlc_run.ARCHIVED_JAR.parent.name, tlc_run.JAR_SHA256)
+        self.assertEqual(tlc_run.DEFAULT_JAR.parent.name, tlc_run.JAR_SHA256)
+        self.assertEqual(tlc_run.JAR_IDENTITY["schema_version"], 1)
+        with zipfile.ZipFile(tlc_run.ARCHIVED_JAR) as jar:
+            manifest = dict(line.split(": ", 1) for line in
+                            jar.read("META-INF/MANIFEST.MF").decode().splitlines() if ": " in line)
+        for field, attribute in [
+            ("source_commit", "X-Git-Revision"),
+            ("build_id", "X-Git-BuildNumber"),
+            ("build_timestamp", "Build-TimeStamp"),
+            ("implementation_version", "Implementation-Version"),
+        ]:
+            self.assertEqual(tlc_run.JAR_IDENTITY[field], manifest[attribute])
+        self.assertEqual(tlc_run.JAR_IDENTITY["sha256"], tlc_run.JAR_SHA256)
+
+    def test_missing_requires_explicit_install(self):
+        with self.assertRaisesRegex(ValueError, "--install.*--download"):
+            tlc_run.prepare_jar(self.jar, download=False)
+        self.assertFalse(self.jar.parent.exists())
+        self.urlopen.assert_not_called()
+
+    def test_clean_install_is_offline_and_survives_cache_deletion(self):
+        for _ in range(2):
+            tlc_run.prepare_jar(self.jar, download=True)
+            tlc_run.verify_jar(self.jar)
+            self.assertEqual(list(self.jar.parent.iterdir()), [self.jar])
+            self.jar.unlink()
+        self.urlopen.assert_not_called()
+
+    def test_existing_verified_cache_needs_neither_archive_nor_permission(self):
+        tlc_run.prepare_jar(self.jar, download=True)
+        with mock.patch.object(tlc_run, "ARCHIVED_JAR", self.root / "absent.jar"):
+            tlc_run.prepare_jar(self.jar, download=False)
+
+    def test_wrong_existing_jar_is_never_overwritten(self):
+        self.jar.parent.mkdir()
+        self.jar.write_bytes(b"different upstream build")
+        for download in (False, True):
+            with self.subTest(download=download), self.assertRaisesRegex(
+                ValueError, "SHA-256 mismatch.*expected.*got"
+            ):
+                tlc_run.prepare_jar(self.jar, download=download)
+            self.assertEqual(self.jar.read_bytes(), b"different upstream build")
+        self.urlopen.assert_not_called()
+
+    def test_missing_archive_has_no_network_fallback(self):
+        with mock.patch.object(tlc_run, "ARCHIVED_JAR", self.root / "absent.jar"):
+            with self.assertRaisesRegex(ValueError, "archive missing.*reinstall"):
+                tlc_run.prepare_jar(self.jar, download=True)
+        self.assertFalse(self.jar.exists())
+        self.urlopen.assert_not_called()
+
+    def test_corrupt_archive_is_rejected_before_install(self):
+        archive = self.root / "wrong.jar"
+        archive.write_bytes(b"not the pinned jar")
+        with mock.patch.object(tlc_run, "ARCHIVED_JAR", archive):
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                tlc_run.prepare_jar(self.jar, download=True)
+        self.assertFalse(self.jar.parent.exists())
+
+    def test_corrupt_staged_copy_is_not_published(self):
+        with mock.patch.object(tlc_run.shutil, "copyfileobj",
+                               side_effect=lambda source, out: out.write(b"partial copy")):
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                tlc_run.prepare_jar(self.jar, download=True)
+        self.assertEqual(list(self.jar.parent.iterdir()), [])
+
+    def test_copy_sync_or_rename_failure_leaves_no_live_jar(self):
+        for target in ("shutil.copyfileobj", "os.fsync", "Path.replace"):
+            with self.subTest(target=target), mock.patch(
+                f"tlc_run.{target}", side_effect=OSError("injected failure")
+            ):
+                with self.assertRaisesRegex(OSError, "injected failure"):
+                    tlc_run.prepare_jar(self.jar, download=True)
+                self.assertEqual(list(self.jar.parent.iterdir()), [])
+
+    def test_verified_legacy_cache_migrates_without_permission(self):
+        legacy = self.root / "tla2tools-1.8.0.jar"
+        shutil.copyfile(tlc_run.ARCHIVED_JAR, legacy)
+        with mock.patch.object(tlc_run, "DEFAULT_JAR", self.jar), \
+                mock.patch.object(tlc_run, "LEGACY_JAR", legacy):
+            tlc_run.prepare_jar(self.jar, download=False)
+        tlc_run.verify_jar(self.jar)
+        tlc_run.verify_jar(legacy)
+
+    def test_wrong_legacy_cache_is_not_relabelled_or_silently_replaced(self):
+        legacy = self.root / "tla2tools-1.8.0.jar"
+        legacy.write_bytes(b"floating release replacement")
+        with mock.patch.object(tlc_run, "DEFAULT_JAR", self.jar), \
+                mock.patch.object(tlc_run, "LEGACY_JAR", legacy):
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                tlc_run.prepare_jar(self.jar, download=True)
+        self.assertFalse(self.jar.exists())
+        self.assertEqual(legacy.read_bytes(), b"floating release replacement")
+
+
 class ExecutionTests(unittest.TestCase):
     def test_timeout_fails(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -94,21 +208,31 @@ class ExecutionTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertFalse(tlc_run.run_case(args, Path("x.jar"), Path(directory), "M", None))
 
-    def test_jar_checks_without_network(self):
-        with tempfile.TemporaryDirectory() as directory:
-            jar = Path(directory) / "tools.jar"
-            with mock.patch("tlc_run.urllib.request.urlopen") as urlopen:
-                with self.assertRaisesRegex(ValueError, "--download"):
-                    tlc_run.prepare_jar(jar, download=False)
-                urlopen.assert_not_called()
-            jar.write_bytes(b"wrong toolchain")
-            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
-                tlc_run.prepare_jar(jar, download=False)
+    def test_install_aliases_and_run_identity(self):
+        for flag in ("--install", "--download"):
+            with self.subTest(flag=flag), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                model = root / "model"
+                model.mkdir()
+                (model / "model.json").write_text(json.dumps(SPEC))
+                (model / "Model.tla").write_text("---- MODULE Model ----\n====\n")
+                jar = root / "cache" / "tools.jar"
+                output = root / "artifacts"
+                with mock.patch("tlc_run.subprocess.run"), \
+                        mock.patch("tlc_run.run_case", return_value=True), \
+                        mock.patch("urllib.request.urlopen", side_effect=AssertionError("network used")), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(tlc_run.main([
+                        str(model), flag, "--jar", str(jar), "--output", str(output)
+                    ]), 0)
+                tlc_run.verify_jar(jar)
+                self.assertEqual(json.loads((output / "toolchain.json").read_text()),
+                                 tlc_run.JAR_IDENTITY)
 
     def test_list_needs_no_java(self):
         with tempfile.TemporaryDirectory() as directory:
             model = Path(directory)
-            (model / "model.json").write_text(__import__("json").dumps(SPEC))
+            (model / "model.json").write_text(json.dumps(SPEC))
             out = io.StringIO()
             with mock.patch("tlc_run.subprocess.run") as run, contextlib.redirect_stdout(out):
                 self.assertEqual(tlc_run.main([str(model), "--list"]), 0)

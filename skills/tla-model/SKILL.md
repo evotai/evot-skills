@@ -2,7 +2,7 @@
 name: tla-model
 description: "Model concurrent, transactional, GC, cache, retry, replication or distributed logic in TLA+ from existing code or a design; check it exhaustively with TLC; map every action and counterexample step back to source. Use to hunt races and data-loss bugs, validate a fix or design, audit a model for missed interleavings, or explain a counterexample. Also 形式化验证、TLA+ 建模、TLC 模型检查、找并发 bug、反例对应代码."
 license: Apache-2.0
-compatibility: Requires Python 3.10+ and Java 11+. The pinned TLC jar (tla2tools 1.8.0) is downloaded once on request and verified by SHA-256.
+compatibility: Requires Python 3.10+ and Java 11+. The exact TLC binary is bundled in a content-addressed archive, installed offline on request, and verified by SHA-256.
 metadata:
   evot:
     requires:
@@ -39,12 +39,13 @@ python3 scripts/tlc_run.py <model-dir> [--case NAME ...] [--output NEW_DIR]
 python3 scripts/tlc_trace.py <artifacts>/<case>/tlc.log [--vars a,b] [--final]
 ```
 
-If the pinned jar is missing, ask once before `--download`. Java comes from `--java`, `JAVA_HOME`, or `PATH`. A mutation/witness `PASS` means its expected counterexample was found, not that the mutated implementation is safe. Default runs check safety, not liveness.
+If the pinned jar is missing, ask once before `--install` (`--download` is an offline compatibility alias). The skill bundles the exact artifact; no mutable release URL is used. Every jar, including `--jar`, must match the recorded full SHA-256. Missing archives or mismatches fail closed; do not change the hash or bypass verification. See [toolchain identity and recovery](references/toolchain.md). Java comes from `--java`, `JAVA_HOME`, or `PATH`. A mutation/witness `PASS` means its expected counterexample was found, not that the mutated implementation is safe. Default runs check safety, not liveness.
 
 ## References — load when needed
 
 | Task | Read |
 |---|---|
+| Install/recover TLC or inspect dependency provenance | [Pinned toolchain](references/toolchain.md) |
 | Choose replay vs explicit source synchronization | [Source versions and consistency](references/source-consistency.md) |
 | Create/change a model or audit interleavings | [Modeling and manifest](references/modeling.md) |
 | Explain a normal-case failure | [Counterexample triage](references/counterexample-triage.md) |
