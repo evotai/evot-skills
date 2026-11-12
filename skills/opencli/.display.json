@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
-  "summary": "Browse, research, and automate the web",
+  "summary": "Use site adapters and existing Chrome login state",
   "example": "opencli: What's new on my Twitter timeline?"
 }

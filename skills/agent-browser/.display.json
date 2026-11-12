@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Automate websites and test web UIs in an isolated browser",
+  "example": "agent-browser: Test the signup form on my local app"
+}

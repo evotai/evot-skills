@@ -18,10 +18,17 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 
 | Unit | Purpose | Needs |
 | --- | --- | --- |
+| `agent-browser` | Navigate websites, fill forms, capture screenshots, and test web UIs in an isolated browser | Automatically installs the CLI via existing npm or Homebrew and downloads a missing browser on first use |
 | `databend-cloud` | Connect, query, manage authorized resources, and investigate Databend Cloud incidents | `python3`, private API key file or environment key; optional `jq` for readable log exports |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
-| `opencli` | Browse, research, and automate the web | `opencli` |
+| `opencli` | Use structured site adapters and workflows needing existing Chrome login state | Automatically installs/updates the CLI via existing npm; browser-backed commands also need Chrome and the OpenCLI extension |
 | `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; exact TLC jar archived with the skill and installed offline on request |
+
+### Browser tools
+
+Use `agent-browser` for general website navigation, forms, screenshots, and web UI tests. Prefer dedicated service skills or OpenCLI site adapters when they already cover the operation; use OpenCLI's browser bridge when the task specifically needs your existing Chrome login or an in-progress tab. The tools do not share browser sessions or element references.
+
+`agent-browser` automatically installs its missing CLI and downloads a missing browser when a task first needs them, then continues without a manual setup step. It prefers a user-local npm installation and reuses existing installations. OpenCLI checks for a newer stable CLI release once at the start of each task and automatically installs or updates into a user-local directory when needed. Both skills follow an observe–act–verify loop, consult live instructions, and resolve routine setup, login, and execution errors autonomously through to a verified result. Installing either skill itself does not trigger CLI or browser setup.
 
 ### Databend Cloud in any agent
 
