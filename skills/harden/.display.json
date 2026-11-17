@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Find loopholes in plans and changes; recommend fixes",
+  "example": "harden: Find loopholes in my current git changes"
+}
