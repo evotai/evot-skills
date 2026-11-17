@@ -136,8 +136,11 @@ language preference, so use the most recent natural-language user messages;
 do not switch to English because this skill is written in English. Keep code,
 paths, and identifiers as they are.
 
-Use the loophole-centered report below, about one page. Translate headings
-into the user's language while preserving IDs, code, paths, and commands.
+Use the loophole-centered report below, about one page. Translate headings and
+finding labels into the user's language; preserve code, paths, commands, and
+priority tags. Use readable labels: "漏洞 1", "漏洞 2" in Chinese; "Loophole 1",
+"Loophole 2" in English, not letter codes such as L1 or L2. Use the same labels
+in the verdict, decisions, modification list, tree annotations, and applied fixes.
 For Chinese, use "已确认的漏洞（未修改）" and end with "需要修改的内容（建议，未执行）"
 for a diff, or "最终方案（建议，未执行）" for a plan.
 Drop empty optional sections, but always include "Confirmed loopholes" and the
@@ -148,10 +151,11 @@ final "Implementation adjustments" or "Final plan" section, even if both say
   short verdict. If no structural change is proposed, add "Structure: checked,
   no change" only if structure was actually checked.
 - "Confirmed loopholes" means evidence-backed wrong behavior under a stated
-  condition. Confirmed does not mean fixed. For each L ID, name the location
-  as `path::symbol` (or `path::section` for prose; a named design step if no
-  file exists), the trigger, the failure, and the evidence. Investigate candidate
-  loopholes during the review; leave unsupported suspicions out of the report.
+  condition. Confirmed does not mean fixed. For each numbered loophole, name
+  the location as `path::symbol` (or `path::section` for prose; a named design
+  step if no file exists), the trigger, the failure, and the evidence. Investigate
+  candidate loopholes during the review; leave unsupported suspicions out of the
+  report.
   Do not add a separate speculation or pending-validation section. If missing
   access or a failed check materially limits the conclusion, state that briefly
   in the verdict instead of claiming the subject is sound.
@@ -162,8 +166,9 @@ final "Implementation adjustments" or "Final plan" section, even if both say
   say there are no blockers provided the user accepts those same blockers.
 - "Accepted risks" contains only risks the user has actually accepted. Name
   who accepted each risk and why. If acceptance is still needed, keep any
-  confirmed failure under its L ID and reference it from "Pending decisions".
-  Do not invent acceptance or treat missing verification as an accepted risk.
+  confirmed failure under its finding label and reference it from "Pending
+  decisions". Do not invent acceptance or treat missing verification as an
+  accepted risk.
 - "Pending decisions" is for genuine scope or design choices, not for hiding
   confirmed failures. Use D IDs for choices, A IDs for optional ablations, and
   at most one S ID for an optional structural proposal. Give an S item its
@@ -171,9 +176,10 @@ final "Implementation adjustments" or "Final plan" section, even if both say
   These optional proposals are not automatically required modifications.
 - End with the actual changes needed: for a diff, "Implementation adjustments
   (proposed; not applied)"; for a plan, "Final plan (proposed; not executed)".
-  Write each concrete fix and its verification here, mapped to the L IDs above.
-  Do not repeat the full finding or evidence. Include optional A/S work only
-  with its decision status clearly marked; never execute this list by default.
+  Write each concrete fix and its verification here, mapped to the numbered
+  loopholes above. Do not repeat the full finding or evidence. Include optional
+  A/S work only with its decision status clearly marked; never execute this list
+  by default.
   If no confirmed loophole requires changes, say "None" rather than invent work.
 - Risks must be introduced or worsened by this change. If relevant, summarize
   pre-existing behavior in one closing line rather than padding the report with
@@ -193,17 +199,17 @@ first:
 ~~~markdown
 ## Subject
 <what was hardened> · <N passes> · evidence: <read only | compiled | tests run>
-<ship as is | resolve L1, L2 first | rethink the approach> · unresolved: P0 x / P1 y / P2 z
+<ship as is | resolve Loophole 1, Loophole 2 first | rethink the approach> · unresolved: P0 x / P1 y / P2 z
 
 ## Confirmed loopholes (confirmed; not modified)
-- L1 [P1] `path::symbol` <triggering condition> → <wrong behavior>
+- Loophole 1 [P1] `path::symbol` <triggering condition> → <wrong behavior>
   Evidence: <source/caller trace, reproduction, or observed test result>
 
 ## Accepted risks
 - R1 [P2] <condition and consequence> · accepted by <user> · reason: <why>
 
 ## Pending decisions
-- D1 <genuine choice, or choice of remedy for L1> · recommend <option and reason>
+- D1 <genuine choice, or choice of remedy for Loophole 1> · recommend <option and reason>
 - S1 `<current path>` → `<target path>` (optional; awaiting approval)
   Harm: <concrete harm> · cost: <N files, M imports, contract impact>
 
@@ -211,12 +217,13 @@ first:
 - A1 <unnecessary part> → <simpler alternative; decision status>
 
 ## Implementation adjustments (proposed; not applied)
-1. L1 `path::symbol` — <specific change needed> · verify: <command/test and expected result>
+1. Loophole 1 `path::symbol` — <specific change needed> · verify: <command/test and expected result>
 ~~~
 
 Include a tree only when it helps explain proposed file or structural changes;
 show only those paths, start with the layering `a → b → c`, and annotate each
-entry with its L/A/S ID. A tree does not authorize any file operation.
+entry with its finding label or A/S ID. A tree does not authorize any file
+operation.
 
 Choose the report form from the selected subject, not the invocation spelling.
 A bare `/harden` that falls back to git uses the diff report, not "Final plan".
@@ -228,6 +235,7 @@ creates or changes files, followed by numbered steps mapped to the findings
 and ending in a `verify:`. Present this plan in the response; do not execute it.
 
 If the user explicitly authorized implementation and a fix was actually applied,
-separate it into "Applied fixes" with its L ID, actual edit, and verification
-result. Do not call recommendations applied, and do not count applied fixes as
-unresolved. In a normal read-only run there is no "Applied fixes" section.
+separate it into "Applied fixes" with its finding label, actual edit, and
+verification result. Do not call recommendations applied, and do not count
+applied fixes as unresolved. In a normal read-only run there is no "Applied
+fixes" section.
