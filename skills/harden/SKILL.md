@@ -89,6 +89,14 @@ for confirmation of the subject.
 
 ## Structure
 
+Check whether the same requirements admit a simpler, more direct implementation:
+prefer reusing existing capabilities to needless wrappers, layers, state,
+branches, or duplicated flows. Prefer fewer concepts, not merely fewer lines;
+preserve correctness, readability, layering, and published contracts. State what
+a proposed simplification removes and why behavior is preserved. A shorter
+alternative alone is not a loophole; use the existing A/S proposal rules.
+If already simple enough, propose nothing.
+
 Look at the directory and file organization on every run, and by default
 propose nothing. Raise at most one structural change, the most valuable one,
 and only when all three hold:
