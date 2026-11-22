@@ -14,7 +14,8 @@ metadata:
 
 Find what would break, propose concrete fixes and simplifications, and repeat
 the analysis until each finding has a clear recommendation. Judge whether the
-approach holds up; this is not a line-by-line code review.
+approach holds up; for a diff, pin each confirmed failure to the change that
+caused it rather than commenting on every line.
 
 ## Execution boundary
 
@@ -63,9 +64,10 @@ for confirmation of the subject.
 
 ## How
 
-1. Read before judging: the code, the project's rules (`AGENTS.md`, guard
-   tests), real callers and imports. Investigate assumptions before drawing
-   conclusions; do not hand the user a list of unchecked leads.
+1. Read the code, real callers, guard tests, and project instructions that
+   apply to the reviewed paths, including scoped overrides. If a finding
+   depends on a project rule, cite the applicable file and smallest supporting
+   line range. Do not attach generic rule citations to ordinary bugs.
 2. List concrete loopholes: what breaks, under which condition. Look where it
    usually hurts: edge cases and existing state, concurrency and partial
    failure, conventions the change bypasses or duplicates, tests that would not
@@ -76,6 +78,12 @@ for confirmation of the subject.
    Check against the user's actual requirements: an explicitly requested product
    or compatibility change is not itself a loophole. Name the requirement or
    invariant violated, not just a behavior that differs from the old version.
+   For a diff, trace the changed behavior from a concrete input or reachable
+   caller to the failure. If claiming impact elsewhere, identify the affected
+   caller or contract and show the link; a possible dependency is not evidence.
+   Merge reports of the same defect with the same remedy, keeping distinct
+   caller evidence and applicable rule citations. Report independently fixable
+   defects separately, even when they share a line.
 3. Recommend a specific fix for each loophole, or explain the risk for the
    user to accept. A recommended fix is not an applied fix. Respect the
    execution boundary above; a serious finding is not permission to edit.
@@ -136,7 +144,9 @@ language preference, so use the most recent natural-language user messages;
 do not switch to English because this skill is written in English. Keep code,
 paths, and identifiers as they are.
 
-Use the loophole-centered report below, about one page. Translate headings and
+Aim for one page by keeping comments short, not by dropping findings. Report
+all qualifying defects, even after a blocker; report none if none qualify.
+Translate headings and
 finding labels into the user's language; preserve code, paths, commands, and
 priority tags. Use readable labels: "漏洞 1", "漏洞 2" in Chinese; "Loophole 1",
 "Loophole 2" in English, not letter codes such as L1 or L2. Use the same labels
@@ -151,11 +161,15 @@ final "Implementation adjustments" or "Final plan" section, even if both say
   short verdict. If no structural change is proposed, add "Structure: checked,
   no change" only if structure was actually checked.
 - "Confirmed loopholes" means evidence-backed wrong behavior under a stated
-  condition. Confirmed does not mean fixed. For each numbered loophole, name
-  the location as `path::symbol` (or `path::section` for prose; a named design
-  step if no file exists), the trigger, the failure, and the evidence. Investigate
-  candidate loopholes during the review; leave unsupported suspicions out of the
-  report.
+  condition. Confirmed does not mean fixed. For a diff, this section *is* the
+  PR-style review: one numbered comment per defect, with its priority, location,
+  and a short explanation of the trigger, failure, and evidence. Anchor it to
+  the smallest causal change in the reviewed hunk: `path:line` or, only when
+  needed, `path:start-end`. Use new-side coordinates for additions and edits;
+  for a pure deletion, label the old-side path and line explicitly (e.g.
+  `old side: src/config.rs:42`). For an untracked file, use its actual lines.
+  Keep unchanged callers in the evidence, not the anchor. For non-diff subjects,
+  use `path::symbol`, `path::section`, or a named design step instead.
   Do not add a separate speculation or pending-validation section. If missing
   access or a failed check materially limits the conclusion, state that briefly
   in the verdict instead of claiming the subject is sound.
@@ -202,8 +216,8 @@ first:
 <ship as is | resolve Loophole 1, Loophole 2 first | rethink the approach> · unresolved: P0 x / P1 y / P2 z
 
 ## Confirmed loopholes (confirmed; not modified)
-- Loophole 1 [P1] `path::symbol` <triggering condition> → <wrong behavior>
-  Evidence: <source/caller trace, reproduction, or observed test result>
+- Loophole 1 [P1] `path:line` — <specific failure>
+  <trigger and why this change causes the failure; caller trace or observed result>
 
 ## Accepted risks
 - R1 [P2] <condition and consequence> · accepted by <user> · reason: <why>
@@ -217,7 +231,7 @@ first:
 - A1 <unnecessary part> → <simpler alternative; decision status>
 
 ## Implementation adjustments (proposed; not applied)
-1. Loophole 1 `path::symbol` — <specific change needed> · verify: <command/test and expected result>
+1. Loophole 1 — <specific change needed> · verify: <command/test and expected result>
 ~~~
 
 Include a tree only when it helps explain proposed file or structural changes;
