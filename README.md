@@ -20,7 +20,7 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | --- | --- | --- |
 | `agent-browser` | Navigate websites, fill forms, capture screenshots, and test web UIs in an isolated browser | Automatically installs the CLI via existing npm or Homebrew and downloads a missing browser on first use |
 | `databend-cloud` | Connect, query, manage authorized resources, and investigate Databend Cloud incidents | `python3`, private API key file or environment key; optional `jq` for readable log exports |
-| `harden` | Find concrete loopholes in plans, git changes, or module layouts and recommend fixes; invoke with `/harden [changes \| target]` | None |
+| `harden` | Stress-test plans and module layouts; review git changes for merge readiness and required fixes | None |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Use structured site adapters and workflows needing existing Chrome login state | Automatically installs/updates the CLI via existing npm; browser-backed commands also need Chrome and the OpenCLI extension |
 | `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; exact TLC jar archived with the skill and installed offline on request |
@@ -32,13 +32,15 @@ conversation. If there is none, it checks local git changes instead; it asks
 for a subject only when neither is available. `/harden changes` explicitly
 selects git changes, and `/harden <target>` selects the named subject.
 
-All forms are read-only reviews by default: they report findings, proposed
-fixes, and verification steps without editing project files or executing the
-plan. Only an explicit user request to implement the findings authorizes edits.
-Reports center on confirmed loopholes with evidence and end with the required
-implementation adjustments (or a revised plan), mapped to those findings.
-Confirmed means verified, not already fixed; recommendations are never reported
-as applied changes.
+For git changes, the report starts with a verdict on the reviewed snapshot:
+**mergeable**, **not mergeable**, or **merge readiness unverified**. It separates
+blocking findings from optional follow-ups and ends with a checklist of only
+what must be fixed or verified before merge. Missing evidence is not a confirmed
+defect. Plan reviews instead say whether the approach can proceed and end with
+a revised plan.
+
+All forms are read-only by default. Only an explicit user request to implement
+the findings authorizes edits. A merge verdict does not authorize merging.
 
 ### Browser tools
 
@@ -99,7 +101,7 @@ metadata:
   evot:
     command:
       schema_version: 1
-      description: Find loopholes and recommend fixes
+      description: Find loopholes, judge merge readiness, and recommend fixes
       usage: /harden [changes | <target>]
       arguments: [changes, "<target>"]
 ```
