@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "summary": "Rewrite AI-sounding prose without changing its meaning",
+  "example": "humanizer: Make this draft sound more like me."
+}

@@ -21,6 +21,7 @@ Installed copies live in `~/.evotai/skills/`. Updates overwrite local edits.
 | `agent-browser` | Navigate websites, fill forms, capture screenshots, and test web UIs in an isolated browser | Automatically installs the CLI via existing npm or Homebrew and downloads a missing browser on first use |
 | `databend-cloud` | Connect, query, manage authorized resources, and investigate Databend Cloud incidents | `python3`, private API key file or environment key; optional `jq` for readable log exports |
 | `harden` | Stress-test plans and module layouts; review git changes for merge readiness and required fixes | None |
+| [`humanizer`](skills/humanizer/SKILL.md) | Rewrite AI-sounding prose without changing its meaning | None |
 | `lark` | Work with Feishu messages, docs, and calendars | `lark-cli` |
 | `opencli` | Use structured site adapters and workflows needing existing Chrome login state | Automatically installs/updates the CLI via existing npm; browser-backed commands also need Chrome and the OpenCLI extension |
 | `tla-model` | Model concurrent or distributed logic in TLA+, check it exhaustively with TLC, and map counterexamples back to code | `python3`, Java 11+; exact TLC jar archived with the skill and installed offline on request |
@@ -41,6 +42,11 @@ a revised plan.
 
 All forms are read-only by default. Only an explicit user request to implement
 the findings authorizes edits. A merge verdict does not authorize merging.
+
+### Humanizer
+
+The `humanizer` unit ships the unmodified `SKILL.md` and MIT license from
+[blader/humanizer v4.0.0](https://github.com/blader/humanizer/tree/a32f24407364c74c812b43c15926d638bee1e072).
 
 ### Browser tools
 
