@@ -11,9 +11,15 @@ Complete the authorized task yourself, end to end: choose an adapter, execute, h
 
 Prefer a dedicated service skill, then a matching OpenCLI adapter. For general websites/forms/tests without a matching adapter, read agent-browser. Reserve `opencli browser` for existing Chrome login or in-progress user-tab state.
 
+## Keep Chrome in the background
+
+In scheduled `/task` runs as well as interactive runs, explicitly prefix **every** OpenCLI invocation with `OPENCLI_WINDOW=background`, including adapters, diagnostics, retries, and cleanup. A bare `opencli browser` command defaults to foreground and can steal focus. An `export` in one `bash` call does not carry over to the next. The user can also set `/env set OPENCLI_WINDOW=background` in the evot instance that runs the task; do not depend on that setting being present.
+
+Do not pass `--window foreground` or switch to foreground to recover from an error unless the user explicitly asks. Background mode uses a real Chrome automation window and preserves the Chrome login state; it is not headless. For general browser automation that does not need the user's Chrome state and has no matching adapter, use agent-browser in headless mode.
+
 ## Setup and update once per task
 
-Prefer `~/.evotai/tools/opencli/node_modules/.bin/opencli`, otherwise resolve `opencli` on PATH. Use that absolute executable in every example below, always prefixed with `OPENCLI_WINDOW=background`; shell variables do not persist across bash calls.
+Prefer `~/.evotai/tools/opencli/node_modules/.bin/opencli`, otherwise resolve `opencli` on PATH. Use that absolute executable in every example below.
 
 Read its version, check existing Node.js/npm, and query the latest stable release before adapter/browser work:
 
@@ -55,7 +61,7 @@ Chain steps with `&&` when no intermediate output needs interpretation. Otherwis
 
 ## Chrome workflow
 
-Every invocation, including adapters and diagnostics, uses `OPENCLI_WINDOW=background`. This operates in a separate real-Chrome automation window sharing login state; it is not headless. Switch foreground only when requested. Choose a unique task session and include it on every browser command:
+Choose a unique task session and include it on every browser command. Keep the background prefix on each command even when reusing the same session:
 
 ```bash
 OPENCLI_WINDOW=background opencli browser open <url> --session evot-web-a7c2
