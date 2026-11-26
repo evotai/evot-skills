@@ -33,12 +33,15 @@ conversation. If there is none, it checks local git changes instead; it asks
 for a subject only when neither is available. `/harden changes` explicitly
 selects git changes, and `/harden <target>` selects the named subject.
 
-For git changes, the report starts with a verdict on the reviewed snapshot:
-**mergeable**, **not mergeable**, or **merge readiness unverified**. It separates
-blocking findings from optional follow-ups and ends with a checklist of only
-what must be fixed or verified before merge. Missing evidence is not a confirmed
-defect. Plan reviews instead say whether the approach can proceed and end with
-a revised plan.
+For git changes, the report starts with a verdict on the reviewed snapshot
+(**mergeable**, **not mergeable**, or **merge readiness unverified**) and what
+must change to merge. A table then lists every finding with its priority, a
+one-sentence problem, and a recommended action. Each finding's details give
+the trigger, impact, evidence, fix, and verification. The skill recommends an
+action for every item instead of asking the user to choose, and ends with a
+checklist of only what must be fixed or verified before merge. Missing evidence
+is not a confirmed defect. Plan reviews instead say whether the approach can
+proceed and end with a revised plan.
 
 All forms are read-only by default. Only an explicit user request to implement
 the findings authorizes edits. A merge verdict does not authorize merging.

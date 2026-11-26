@@ -86,8 +86,8 @@ for confirmation of the subject.
    Merge reports of the same defect with the same remedy, keeping distinct
    caller evidence and applicable rule citations. Report independently fixable
    defects separately, even when they share a line.
-3. Recommend a specific fix and verification for each finding that blocks
-   merge or prevents the plan from proceeding. Keep follow-ups separate. Run
+3. Recommend one action, a specific fix, and a verification for every finding,
+   blocking or not. Run
    relevant non-destructive checks when feasible. Say what actually ran, and
    distinguish failed checks from unrun or inconclusive ones. A serious finding
    is not permission to edit.
@@ -133,17 +133,17 @@ Keep it converging:
   proposal, never add one.
 - If several structural problems compete, the design is the problem: say so in
   one sentence in the verdict instead of listing them.
-- An optional structural proposal is the user's decision and does not block
-  merge. A guard-test failure introduced by the diff is instead a P1 loophole
-  under "Confirmed loopholes", even if no optional move is worth proposing.
+- An optional structural proposal does not block merge; recommend whether to do
+  it now, after merge, or not at all. A guard-test failure introduced by the
+  diff is instead a P1 loophole, even if no optional move is worth proposing.
 
 ## Merge verdict for a diff
 
 Choose exactly one status for the reviewed snapshot. Lead with it and the reason:
 
 - **Not mergeable**: an unresolved P0/P1 blocker or a confirmed failure of an
-  applicable merge requirement. Name what blocks merge. A proposed fix or a
-  pending choice of remedy does not change the verdict.
+  applicable merge requirement. Name what blocks merge and what must change.
+  A proposed fix does not change the verdict.
 - **Merge readiness unverified**: no confirmed blocker, but evidence needed
   for a merge decision is missing (for example, part of the diff is unavailable
   or a required check has no result). Name the missing evidence and the smallest
@@ -170,90 +170,125 @@ language preference, so use the most recent natural-language user messages;
 do not switch to English because this skill is written in English. Keep code,
 paths, and identifiers as they are.
 
-Aim for one page by keeping comments short, not by dropping findings. Report
-all qualifying defects, even after a blocker; report none if none qualify.
-Translate verdicts, headings, and finding labels into the user's language.
-Keep code, paths, commands, and priority tags unchanged. Use readable numbered
-labels (e.g. "Loophole 1", not "L1") consistently throughout the report. Always
-include "Confirmed loopholes" and the applicable final section, even if empty.
-Drop empty optional sections.
+Write for a reader who did not watch the review. In this order, and without
+decoding, they must learn: can it merge, what is wrong and how bad each problem
+is, and exactly what to change. Aim for one page by keeping each item short,
+not by dropping findings. Report all qualifying defects, even after a blocker.
+Translate headings, verdicts, labels, and recommended actions into the user's
+language; keep code, paths, commands, and priority tags unchanged. Use readable
+numbered labels ("Loophole 1", not "L1") consistently.
 
-- Start with the verdict, then give the subject, number of passes, and evidence
-  actually gathered. For a non-diff subject, judge whether the approach can
-  proceed instead of issuing a merge verdict. Add "Structure: checked, no change"
-  only if structure was checked and no structural change is proposed.
-- "Confirmed loopholes" means evidence-backed wrong behavior under a stated
-  condition or a demonstrated breach of a mandatory rule. Confirmed does not
-  mean fixed. For a diff, use one PR-style comment per defect with its number,
-  priority, location, trigger, failure, and evidence. Anchor it to
-  the smallest causal change in the reviewed hunk: `path:line` or, only when
-  needed, `path:start-end`. Use new-side coordinates for additions and edits;
-  for a pure deletion, label the old-side path and line explicitly (e.g.
-  `old side: src/config.rs:42`). For an untracked file, use its actual lines.
-  Keep unchanged callers in the evidence, not the anchor. For non-diff subjects,
-  use `path::symbol`, `path::section`, or a named design step instead.
-  For a diff, mark P0/P1 blockers and P2 follow-ups. Keep unsupported suspicions
-  out; put any required but missing verification in the verdict and checklist.
-- Every confirmed unresolved loophole stays in that section and in the
-  verdict's priority counts until verified fixed or explicitly accepted when
-  allowed. Needing a product decision about its remedy does not turn a loophole
-  into a D item. Never report P1 0 while describing an unresolved P1 elsewhere.
-- "Accepted risks" contains only risks the user has actually accepted. Name
-  who accepted each risk and why. If acceptance is still needed, keep any
-  confirmed failure under its finding label and reference it from "Pending
-  decisions". Do not invent acceptance or treat missing verification as an
-  accepted risk.
-- "Pending decisions" is for genuine scope or design choices, not for hiding
-  confirmed failures. Use D IDs for choices, A IDs for optional ablations, and
-  at most one S ID for an optional structural proposal. Give an S item its
-  concrete harm, target path, files/imports moved, and contract impact there.
-  Optional A/S proposals do not belong in the merge checklist.
-- End the diff report with "Required before merge (proposed; not applied)".
-  For each blocking finding, use its label and give the smallest sufficient
-  change, one sentence on why it resolves the failure or satisfies the rule,
-  and a `verify:` step with the expected result. For a missing or failing gate
-  without a confirmed diff defect, name what it must establish and why that is
-  necessary for the verdict; do not prescribe a code change. If nothing is
-  required, say "None". Keep P2 recommendations with their findings as follow-ups.
-  Do not repeat the evidence or execute the list by default.
+Recommend; do not ask. Every finding, ablation, and structural proposal gets
+exactly one recommended action and a one-clause reason. Never leave an item
+"awaiting your decision", list options for the user to pick, or end with a
+question. When the right choice depends on a fact only the user knows, pick the
+safer default, state the assumption, and say what fact would change it.
+
+Recommended actions:
+
+- **Fix before merge**: required for every P0 and P1. If you would not fix a P1
+  before merge, recheck its priority instead of recommending acceptance.
+- **Fix after merge**: a P2 worth fixing as a follow-up.
+- **Accept, no fix**: a P2 whose fix costs more or risks more than the failure.
+  Say why. This is a recommendation; a risk counts as accepted only when the
+  user actually accepted it, and a recommendation never changes the verdict.
+- Ablations and structure: **Do now**, **Do after merge**, or **Skip**.
+
+Priorities. Show each tag with its meaning (e.g. "P1 · blocks merge"), so the
+reader does not need to know the scale:
+
+- `P0` · blocks merge: wrong results, data loss, security, or a broken
+  published contract on a normal path. Never accepted as a risk.
+- `P1` · blocks merge: a meaningful failure under a specific but plausible
+  condition, or a breach of a mandatory project rule. Only an explicit user
+  acceptance of this specific risk, where the project allows it, unblocks it.
+- `P2` · does not block merge: low impact or cosmetic. Ease of fixing never
+  sets priority.
+
+Report sections, in this order. Drop an empty optional section; never pad.
+
+1. **Verdict** (required). Line 1: the status, the blocking labels, and what
+   must change to merge, e.g. "Not mergeable — fix Loophole 1 first; then it
+   can merge." For "Mergeable", say nothing blocks. For "Unverified", name the
+   missing evidence and the check that resolves it. Line 2: subject, passes,
+   and evidence actually gathered (what ran and its result). Add "Structure:
+   checked, no change" when structure was checked and nothing is proposed. For
+   a non-diff subject, say whether the approach can proceed as is, can proceed
+   after the listed changes, or should be redesigned.
+2. **Findings** (required; write "None" if nothing qualifies). A table,
+   highest priority first: `# | Priority | Problem | Recommendation`. Problem
+   is one plain sentence about what the user or caller sees go wrong, not code
+   mechanics. Recommendation is one action from the list above.
+3. **Details**: one block per finding, in table order, with the same label:
+   - Heading: label, priority with meaning, and the one-sentence problem.
+   - Location: for a diff, the smallest causal change in the reviewed hunk,
+     `path:line` or, only when needed, `path:start-end`. Use new-side
+     coordinates for additions and edits; label a pure deletion explicitly
+     (`old side: src/config.rs:42`); use actual lines for an untracked file.
+     Unchanged callers go in the evidence, not the location. For non-diff
+     subjects, use `path::symbol`, `path::section`, or a named design step.
+   - Trigger: one sentence, the concrete condition.
+   - Impact: one sentence, what breaks and for whom. Compare with the old
+     behavior only when the change is a regression.
+   - Evidence: at most three short sentences or a caller trace with
+     `path:line`. Cite a project rule only when the finding depends on it.
+   - Fix: the smallest sufficient change and why it removes the failure. For
+     "Accept, no fix", why accepting is safe instead.
+   - Verify: the check and its expected result.
+
+4. **Simplifications** (optional): each A item (at most one S item) states what
+   it removes, why behavior is preserved, and its recommendation with reason.
+   An S item also gives the concrete harm, target path, files and imports
+   moved, and contract impact.
+5. **Pre-existing issues** (optional): problems found in unchanged code that
+   the change neither introduced nor worsened. One line each with a
+   recommendation; they never count toward the verdict.
+6. **Before merge** (required for a diff): a numbered checklist of only the
+   "Fix before merge" items and missing required checks, in the order to do
+   them. One line each: label, the change in a few words, and `verify:`. Do not
+   repeat evidence. For a missing gate without a defect, name what it must
+   establish. If nothing is required, write "None; can merge as is." End with
+   one line naming the labels recommended for after merge, if any.
+
+Rules that keep the report honest:
+
+- A finding is confirmed only by evidence; confirmed does not mean fixed.
+  Every unresolved P0/P1 stays in the table and blocks the verdict until
+  verified fixed or explicitly accepted by the user. Keep unsupported
+  suspicions out; put required but missing verification in the verdict and the
+  checklist.
 - Diff findings must be introduced or worsened by the change. If an unrelated
-  failure still blocks a required merge check, report it as a check blocker,
-  not a diff finding. Successful tests are evidence, not loopholes.
-
-Tag every loophole and risk with a priority, and list each section highest
-first:
-
-- `P0`: wrong results, data loss, security, or a broken published contract on a
-  normal path. Blocks merge until fixed; cannot be accepted as a risk.
-- `P1`: meaningful failure under a specific but plausible condition, or breach
-  of a mandatory project rule. Blocks merge unless the user explicitly accepts
-  this specific risk and the project allows it to be waived.
-- `P2`: low-impact or cosmetic; may be deferred without blocking merge. Ease of
-  fixing an issue does not determine its priority.
+  failure blocks a required merge check, report it as a check blocker in the
+  verdict and checklist. Successful tests are evidence, not findings.
+- Add an "Accepted risks" line only for a risk the user actually accepted,
+  naming who accepted it and why.
 
 ~~~markdown
-## Merge verdict
-Not mergeable — Loophole 1 must be fixed and verified · unresolved: P0 0 / P1 1 / P2 0
-Subject: <reviewed diff or snapshot> · <N passes> · evidence: <inspected paths and check results>
+## Verdict
+Not mergeable — fix Loophole 1 first; after that it can merge.
+Subject: <reviewed diff or snapshot> · <N> passes · evidence: <paths read; checks run and results>
 
-## Confirmed loopholes (not modified)
-- Loophole 1 [P1 · blocks merge] `path:line` — <specific failure>
-  <trigger and why this change causes the failure; caller trace or observed result>
+## Findings
+| # | Priority | Problem | Recommendation |
+|---|---|---|---|
+| Loophole 1 | P1 · blocks merge | <what the user sees go wrong> | Fix before merge |
+| Loophole 2 | P2 · does not block | <what the user sees go wrong> | Accept, no fix: <reason> |
 
-## Accepted risks
-- R1 [P2] <condition and consequence> · accepted by <user> · reason: <why>
+## Details
+### Loophole 1 · P1 · blocks merge — <same one-sentence problem>
+- Location: `path:line`
+- Trigger: <concrete condition>
+- Impact: <what breaks, for whom>
+- Evidence: <caller trace or observed result with path:line>
+- Fix: <smallest change; why it removes the failure>
+- Verify: <check and expected result>
 
-## Pending decisions
-- D1 <genuine choice, or choice of remedy for Loophole 1> · recommend <option and reason>
-- S1 `<current path>` → `<target path>` (optional; awaiting approval)
-  Harm: <concrete harm> · cost: <N files, M imports, contract impact>
+## Simplifications
+- A1 <part to remove> → <simpler alternative>. Preserves <behavior> because <reason>. Recommend: Do after merge, <reason>.
 
-## Ablation (recommendations only)
-- A1 <unnecessary part> → <simpler alternative; decision status>
-
-## Required before merge (proposed; not applied)
-1. Loophole 1 — <smallest sufficient change>
-   Why: <how the change clears the blocker> · verify: <check and expected result>
+## Before merge (proposed; not applied)
+1. Loophole 1 — <change in a few words> · verify: <check and expected result>
+After merge: Loophole 2 (optional), A1.
 ~~~
 
 Include a tree only when it helps explain proposed file or structural changes;
@@ -263,16 +298,19 @@ operation.
 
 Choose the report form from the selected subject, not the invocation spelling.
 A bare `/harden` that falls back to git uses the diff report, not "Final plan".
-For a selected plan, strategy, or design, the last section is "Final plan
-(proposed; not executed)": self-contained and ready to execute, written as if
-the original never existed, not as a diff of it. This also applies when local
-git changes provide supporting context. Include a tree if the proposed plan
-creates or changes files, followed by numbered steps mapped to the findings.
+For a selected plan, strategy, or design, use the same Verdict, Findings, and
+Details sections; read "blocks merge" as "blocks proceeding" and "Fix before
+merge" as "Fix in the plan". The last section, replacing "Before merge", is
+"Final plan (proposed; not executed)": self-contained and ready to execute,
+written as if the original never existed, not as a diff of it. This also
+applies when local git changes provide supporting context. Include a tree if
+the proposed plan creates or changes files, followed by numbered steps mapped
+to the findings.
 Briefly explain why each recommended change is needed and end with a `verify:`
 step and expected result. Present this plan in the response; do not execute it.
 
 If the user explicitly authorized implementation and an edit was actually made,
 report it before the final section under "Applied fixes" with its finding label,
 actual edit, and verification result. Do not call recommendations applied or
-remove a finding from the unresolved counts on the strength of an edit alone.
+mark a finding resolved on the strength of an edit alone.
 In a normal read-only run there is no "Applied fixes" section.
